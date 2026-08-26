@@ -155,10 +155,12 @@ public:
          return false;
         }
 
-      const double spread = CurrentSpreadPrice(m_symbol);
+      string sym = sig.symbol;
+      if(StringLen(sym)==0) sym = m_symbol;
+      const double spread = CurrentSpreadPrice(sym);
       if(m_max_spread > 0.0 && spread > m_max_spread)
         {
-         reason = StringFormat("点差过大 %.2f>%.2f", spread, m_max_spread);
+         reason = StringFormat("%s 点差过大 %.2f>%.2f", sym, spread, m_max_spread);
          return false;
         }
 

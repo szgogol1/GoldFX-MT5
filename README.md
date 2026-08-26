@@ -1,73 +1,75 @@
-# GoldFX Intraday v2 — MQL5 选择性黄金日内框架
+# GoldFX Intraday v3 — 七条件 + 组合基础设施
 
-面向 **XAUUSD** 的选择性交易架构：等待高质量机会，开仓即带止损，独立管理每笔仓位；**默认无网格、无马丁**。
+参考 **SafeScalperPro / Prime** 的工程能力，在自有框架上实现：
 
-> 研究/模拟盘骨架。历史表现不代表未来。实盘前请充分测试。
+- **七条件缺一不可**入场（EMA 趋势/强度/价格位置/突破/RSI/动量/H1 确认）
+- **无网格 · 无马丁 · 一次一笔/每品种一笔**
+- **自适应风险引擎**（回撤降仓、ATR 反比、滚动胜率调整）
+- **单图多品种**（最多 8，CSV 配置）+ **相关性保护**
+- **Telegram** 推送与 `/status /stop /resume /risk`（原生 WebRequest，无 DLL）
+- **Forge 仪表盘**（回测自动禁用）
+- **峰值回撤持久化**、交易 CSV 日志、新闻/周五/时段过滤
 
-## 设计理念（对齐机构级选择性系统）
+> 非官方克隆。研究与模拟用途。实盘前请充分测试。
 
-| 原则 | 实现 |
-|------|------|
-| 选择性入场 | 质量分门槛 + 日交易上限 + 冷却 + 点差过滤 + 优选时段 |
-| 无网格 / 无马丁 | `max_positions` 默认 1；亏损仓禁止摊平加仓 |
-| 开仓即保护 | 无有效 SL 的信号一律拒绝；丢失 SL 时紧急补回 |
-| 智能利润保护 | 保本、部分止盈、ATR 动态追踪 |
-| 动能减弱离场 | ADX 回落且利润回吐时提前平仓 |
-| 短线暴露控制 | 最长持仓时间限制 |
-| 多种资金管理 | 固定手数 / 风险% / 余额比例 / **八档自动** |
-| 账户保护 | 日内亏损上限 + 峰值净值回撤保护（触发可全平） |
+## 七条件（全部满足才开仓）
+
+1. EMA(150)/EMA(510) 方向  
+2. EMA 间距 ≥ ATR × 最小倍数（排除横盘）  
+3. 收盘在双均线正确一侧  
+4. 收盘突破近 N 根高/低 + ATR 缓冲  
+5. RSI 健康区（多 40–65，空 35–60）  
+6. 收盘动量确认  
+7. （可选）H1 EMA50/200 同向  
 
 ## 目录
 
 ```
 Experts/GoldFX_Intraday/GoldFX_Intraday.mq5
 Include/GoldFX/
-  Common.mqh            # 类型、八档风险预设
-  RegimeDetector.mqh    # 趋势/震荡识别
-  TrendStrategy.mqh     # 趋势 + 质量分
-  RangeStrategy.mqh     # 震荡 + 质量分
-  SelectivityFilter.mqh # 选择性闸门
-  PositionManager.mqh   # 保本/追踪/部分平/动能/超时
-  RiskManager.mqh       # 资金管理与回撤
-  TradeManager.mqh      # 下单
-  ParamPanel.mqh        # 图表控制台
-Presets/GoldFX_Intraday_XAUUSD_M15.set
+  SevenConditionStrategy.mqh   # 七条件引擎
+  PortfolioEngine.mqh          # 多品种
+  AdaptiveRisk.mqh             # 自适应风险
+  SessionNewsFilter.mqh        # 时段/新闻/周五
+  Persistence.mqh              # 跨重启状态
+  TelegramBridge.mqh
+  TradeJournal.mqh
+  Dashboard.mqh
+  RiskManager / PositionManager / TradeManager / ...
+Presets/
+  GoldFX_XAUUSD_M5_SevenCond.set
+  GoldFX_Portfolio_Major.set
+  Phase1_Structure.set … Phase4_Session_DayCap.set
 ```
 
 ## 安装
 
-1. MT5 → **文件 → 打开数据文件夹** → `MQL5/`
-2. 复制 `Experts/GoldFX_Intraday/`、`Include/GoldFX/`、`Presets/`
-3. MetaEditor 打开 EA → **F7** 编译
-4. 挂到 **XAUUSD M15**，勾选算法交易；建议 **对冲(Hedging)** 账户
+1. 复制到 MT5 `MQL5/Experts` 与 `MQL5/Include/GoldFX`、`MQL5/Presets`  
+2. MetaEditor **F7** 编译  
+3. 挂 **XAUUSD M5**（推荐伦敦–纽约）  
+4. Telegram：工具 → 选项 → 专家 → 允许 `https://api.telegram.org`
 
-## 即插即用
+## 推荐起步
 
-1. 加载预设或保持默认 **资金管理 = 八档自动、风险 = R4**
-2. 图表控制台可点 **R1–R8** 切换风险档、点击资金按钮循环理财方式
-3. 先用 **观察** 或关闭 `InpAllowTrade` 核对识别与拒绝原因
-4. 再模拟盘小资金验证点差、滑点与填充模式
+| 步骤 | 预设 |
+|------|------|
+| 结构验证 | `Phase1_Structure.set`（可关交易） |
+| 风险/SLTP | `Phase2_SL_TP_Risk.set` |
+| 离场 | `Phase3_Exit_Management.set` |
+| 时段 | `Phase4_Session_DayCap.set` |
+| 黄金即用 | `GoldFX_XAUUSD_M5_SevenCond.set` |
+| 多品种 | `GoldFX_Portfolio_Major.set`（`InpSymbols=XAUUSD,XAGUSD,...`） |
 
-### 八档风险（示意）
+资金管理默认 **自适应 (MM_ADAPTIVE)**；亦可固定手数 / 风险% / 八档自动。
 
-| 档 | 单笔风险% | 日亏% | 净值回撤% | 日最大单 | 最低质量分 |
-|----|-----------|-------|-----------|----------|------------|
-| R1 | 0.25 | 1.0 | 5 | 1 | 75 |
-| R4 | 0.75 | 2.5 | 10 | 3 | 60 |
-| R8 | 2.00 | 5.0 | 20 | 5 | 45 |
+## 远程命令（Telegram）
 
-（完整映射见 `Common.mqh` → `GetRiskPreset`）
+`/status` `/stop` `/resume` `/pause SYMBOL` `/risk 0.5`
 
-## 建议运行环境
+## 与营销版差异（刻意）
 
-- 品种：`XAUUSD`；周期：`M15` / `M5`
-- 账户：对冲；杠杆建议 ≥ 1:100
-- 点差：ECN/RAW/低点差
-- VPS：交易周 24/5 在线
-- 最低体验资金可自定；务必从小手数开始
+未实现其全部商业预设包与私有蒙特卡洛文件；核心是可审计的开源级骨架，便于你替换信号或风控层。
 
 ## 免责声明
 
-外汇与黄金交易风险显著，可能损失全部本金。本框架不保证盈利。不同经纪商的点差、滑点与执行会导致结果差异。请先在模拟账户验证。
-
-**等待 → 出击 → 守护。** 不追逐市场。
+交易有亏损风险。新闻日历依赖终端数据；部分经纪商/测试器可能无日历（过滤器会安全降级）。务必先模拟。

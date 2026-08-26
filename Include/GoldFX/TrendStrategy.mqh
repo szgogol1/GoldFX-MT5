@@ -98,6 +98,7 @@ public:
      {
       SSignalResult r;
       InitSignal(r);
+      r.symbol = m_symbol;
 
       datetime bar = iTime(m_symbol, m_tf, 0);
       if(bar == m_last_signal_bar)

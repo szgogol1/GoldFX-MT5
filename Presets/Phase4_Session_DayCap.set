@@ -1,0 +1,12 @@
+; Phase4 — 时段与每日上限
+InpUseSession=true
+InpSessStart=8
+InpSessEnd=20
+InpFridayCut=true
+InpFridayHour=16
+InpMaxTradesDay=3
+InpCooldownBars=4
+InpUseNews=true
+InpNewsBefore=30
+InpNewsAfter=30
+InpMaxSpread=0.50
