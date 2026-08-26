@@ -1,0 +1,11 @@
+; Phase2 — SL/TP/风险
+InpStrategy=0
+InpMoneyMode=4
+InpRiskLevel=4
+InpScSLATR=1.5
+InpScTPATR=2.0
+InpRiskPct=0.75
+InpMaxDailyLoss=2.5
+InpMaxEqDD=10.0
+InpAllowTrade=true
+InpMaxTradesDay=3

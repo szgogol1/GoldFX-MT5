@@ -1,0 +1,12 @@
+; Phase3 — 离场管理
+InpBE=true
+InpBETrig=1.0
+InpBELock=0.10
+InpTrail=true
+InpTrailStart=1.5
+InpTrailStep=0.80
+InpPartial=true
+InpPartialATR=1.2
+InpPartialPct=50.0
+InpMomExit=true
+InpMaxHoldMin=240

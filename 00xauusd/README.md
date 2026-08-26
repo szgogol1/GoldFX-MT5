@@ -1,16 +1,5 @@
 # GoldFX Intraday v3 — 七条件 + 组合基础设施
 
-## Windows 目标目录：`D:\00xauusd\`
-
-完整可部署包在仓库的 [`00xauusd/`](00xauusd/) 目录（或下载 `00xauusd_MT5.zip`）：
-
-1. 将 `00xauusd` 文件夹**整体复制/解压到** `D:\00xauusd\`
-2. 双击 `D:\00xauusd\install_to_MT5.bat`，粘贴 MT5 的 `MQL5` 路径完成安装
-3. 详见 `00xauusd/安装说明.txt`
-
-云端环境无法直接写入你电脑的 `D:` 盘，需本机完成上述复制。
-
-
 参考 **SafeScalperPro / Prime** 的工程能力，在自有框架上实现：
 
 - **七条件缺一不可**入场（EMA 趋势/强度/价格位置/突破/RSI/动量/H1 确认）

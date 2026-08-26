@@ -1,0 +1,12 @@
+; Phase1 — 结构基线（验证编译与七条件）
+InpStrategy=0
+InpMoneyMode=0
+InpFixedLot=0.01
+InpRiskLevel=1
+InpAllowTrade=false
+InpShowDashboard=true
+InpSymbols=
+InpMinBars=520
+InpScEmaFast=150
+InpScEmaSlow=510
+InpMaxPortfolio=1
