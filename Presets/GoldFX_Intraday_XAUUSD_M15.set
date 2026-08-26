@@ -1,7 +1,9 @@
-; GoldFX_Intraday 预设 — XAUUSD M15 日内起步参考（请按经纪商点差/点值再校准）
-; 在 MT5：图表挂载 EA 后「加载」本 .set，或复制到 MQL5/Presets
+; GoldFX_Intraday v2 — XAUUSD M15 选择性默认（无网格/无马丁）
+; 建议：对冲账户、ECN/RAW 低点差、VPS 24/5
 
 InpRunMode=0
+InpMoneyMode=3
+InpRiskLevel=4
 InpShowPanel=true
 InpAllowTrade=true
 InpMagic=20260826
@@ -20,10 +22,27 @@ InpRSIOversold=30.0
 InpRSIOverbought=70.0
 InpRangeSL_ATR=1.0
 InpRangeTP_ATR=1.2
-InpUseFixedLot=true
+InpMinQuality=60
+InpMaxTradesDay=3
+InpCooldownBars=4
+InpMaxSpread=0.50
+InpPreferLondonNY=true
+InpUseBreakeven=true
+InpBETriggerATR=1.0
+InpBELockATR=0.10
+InpUseTrailing=true
+InpTrailStartATR=1.5
+InpTrailStepATR=0.80
+InpUseMomentumExit=true
+InpMaxHoldMinutes=240
+InpUsePartialClose=true
+InpPartialAtATR=1.2
+InpPartialPercent=50.0
 InpFixedLot=0.01
-InpRiskPercent=0.5
-InpMaxDailyLossPct=3.0
+InpRiskPercent=0.75
+InpLotPer1k=0.02
+InpMaxDailyLossPct=2.5
+InpMaxEquityDDPct=10.0
 InpMaxPositions=1
 InpUseSessionFilter=true
 InpSessionStartHour=8

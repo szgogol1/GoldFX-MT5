@@ -1,5 +1,5 @@
 //+------------------------------------------------------------------+
-//| RangeStrategy.mqh — 震荡策略（布林带边缘 + RSI 极值均值回归）       |
+//| RangeStrategy.mqh — 选择性震荡：布林边缘 + RSI 极值质量评分         |
 //+------------------------------------------------------------------+
 #property copyright "GoldFX Intraday Framework"
 #property strict
@@ -89,11 +89,7 @@ public:
    SSignalResult Evaluate(void)
      {
       SSignalResult r;
-      r.signal = SIGNAL_NONE;
-      r.entry  = 0;
-      r.sl     = 0;
-      r.tp     = 0;
-      r.reason = "";
+      InitSignal(r);
 
       datetime bar = iTime(m_symbol, m_tf, 0);
       if(bar == m_last_signal_bar)
@@ -104,7 +100,7 @@ public:
       if(!CopyBuf(m_bb_h, 1, 3, upper) ||
          !CopyBuf(m_bb_h, 0, 3, mid) ||
          !CopyBuf(m_bb_h, 2, 3, lower) ||
-         !CopyBuf(m_rsi_h, 0, 3, rsi) ||
+         !CopyBuf(m_rsi_h, 0, 4, rsi) ||
          !CopyBuf(m_atr_h, 0, 3, atr) ||
          CopyClose(m_symbol, m_tf, 0, 3, close) < 3)
          return r;
@@ -117,31 +113,54 @@ public:
       if(!SymbolInfoTick(m_symbol, tick))
          return r;
 
-      // 收盘触及下轨且 RSI 超卖 → 做多回归中轨
       const bool buy_setup  = (close[1] <= lower[1] && rsi[1] <= m_rsi_os);
       const bool sell_setup = (close[1] >= upper[1] && rsi[1] >= m_rsi_ob);
 
+      if(!buy_setup && !sell_setup)
+        {
+         r.reason = "等待震荡极值";
+         return r;
+        }
+
+      int q = 40;
+      const double band = upper[1] - lower[1];
+      // 带宽适中更适合均值回归（过宽可能是趋势启动）
+      const double bw = SafeDiv(band, mid[1], 0.0);
+      if(bw > 0.0 && bw < 0.02) q += 15;
+      else if(bw < 0.03)        q += 8;
+
       if(buy_setup)
         {
+         if(rsi[1] < m_rsi_os - 5.0) q += 15;
+         else if(rsi[1] <= m_rsi_os) q += 8;
+         if(rsi[1] > rsi[2])         q += 10; // RSI 拐头
+         if(close[1] < lower[1])     q += 5;  // 刺破更深
          r.signal = SIGNAL_BUY;
          r.entry  = tick.ask;
          r.sl     = NormalizePrice(r.entry - atr_v * m_sl_mult);
-         // 目标优先中轨，否则 ATR 倍数
          const double mid_tp = mid[1];
          r.tp = (mid_tp > r.entry) ? NormalizePrice(mid_tp)
                                    : NormalizePrice(r.entry + atr_v * m_tp_mult);
-         r.reason = StringFormat("震荡多: 触下轨 RSI=%.1f", rsi[1]);
+         r.atr = atr_v;
+         r.quality = MathMin(100, q);
+         r.reason = StringFormat("震荡多 下轨+RSI=%.1f Q=%d", rsi[1], r.quality);
          m_last_signal_bar = bar;
         }
-      else if(sell_setup)
+      else
         {
+         if(rsi[1] > m_rsi_ob + 5.0) q += 15;
+         else if(rsi[1] >= m_rsi_ob) q += 8;
+         if(rsi[1] < rsi[2])         q += 10;
+         if(close[1] > upper[1])     q += 5;
          r.signal = SIGNAL_SELL;
          r.entry  = tick.bid;
          r.sl     = NormalizePrice(r.entry + atr_v * m_sl_mult);
          const double mid_tp = mid[1];
          r.tp = (mid_tp < r.entry) ? NormalizePrice(mid_tp)
                                    : NormalizePrice(r.entry - atr_v * m_tp_mult);
-         r.reason = StringFormat("震荡空: 触上轨 RSI=%.1f", rsi[1]);
+         r.atr = atr_v;
+         r.quality = MathMin(100, q);
+         r.reason = StringFormat("震荡空 上轨+RSI=%.1f Q=%d", rsi[1], r.quality);
          m_last_signal_bar = bar;
         }
       return r;

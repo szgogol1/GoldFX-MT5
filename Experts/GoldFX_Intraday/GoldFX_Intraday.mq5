@@ -1,117 +1,172 @@
 //+------------------------------------------------------------------+
-//| GoldFX_Intraday.mq5 — 黄金/外汇日内交易初步框架                     |
-//| 功能：趋势/震荡自动识别 · 策略切换 · 图表参数面板 · 基础风控         |
+//| GoldFX_Intraday.mq5 — XAUUSD 选择性日内框架（Titan 风格能力）       |
+//| 选择性入场 · 无网格/无马丁 · 独立仓位管理 · 八档风险 · 回撤保护     |
 //+------------------------------------------------------------------+
 #property copyright "GoldFX Intraday Framework"
 #property link      ""
-#property version   "1.00"
-#property strict
-#property description "黄金/外汇日内框架：ADX+布林带宽体制识别，趋势EMA交叉 / 震荡均值回归，图表可调参"
+#property version   "2.00"
+#property description "XAUUSD选择性架构: 质量门控入场, 预设止损, 保本/追踪/动能离场, 八档风险, 无网格无马丁"
 
 #include <GoldFX/Common.mqh>
 #include <GoldFX/RegimeDetector.mqh>
 #include <GoldFX/TrendStrategy.mqh>
 #include <GoldFX/RangeStrategy.mqh>
 #include <GoldFX/RiskManager.mqh>
+#include <GoldFX/SelectivityFilter.mqh>
+#include <GoldFX/PositionManager.mqh>
 #include <GoldFX/TradeManager.mqh>
 #include <GoldFX/ParamPanel.mqh>
 
-//======================== 输入参数（EA 属性面板） ========================
-input group "=== 运行 ==="
-input ENUM_RUN_MODE InpRunMode           = MODE_AUTO;   // 初始运行模式
-input bool          InpShowPanel         = true;        // 显示图表参数面板
-input bool          InpAllowTrade        = true;        // 允许实盘/模拟下单
-input int           InpMagic             = 20260826;    // Magic Number
-input int           InpSlippage          = 30;          // 滑点(点)
+//======================== 输入参数 ========================
+input group "=== 运行（即插即用默认已偏 XAUUSD）==="
+input ENUM_RUN_MODE    InpRunMode           = MODE_AUTO;      // 运行模式
+input ENUM_MONEY_MODE  InpMoneyMode         = MM_AUTO_LEVEL;  // 资金管理方式
+input ENUM_RISK_LEVEL  InpRiskLevel         = RISK_L4;        // 八档风险（默认R4）
+input bool             InpShowPanel         = true;           // 图表控制台
+input bool             InpAllowTrade        = true;           // 允许下单
+input int              InpMagic             = 20260826;       // Magic
+input int              InpSlippage          = 30;             // 滑点(点)
 
 input group "=== 体制识别 ==="
-input int           InpADXPeriod         = 14;          // ADX 周期
-input double        InpADXTrend          = 25.0;        // ADX ≥ 此值偏趋势
-input double        InpADXRange          = 20.0;        // ADX ≤ 此值偏震荡
-input int           InpATRPeriod         = 14;          // ATR 周期
-input double        InpBBWidthRangeMax   = 0.012;       // 布林带宽上限(相对中轨)判震荡
-input int           InpMAFast            = 20;          // 快均线
-input int           InpMASlow            = 50;          // 慢均线
+input int              InpADXPeriod         = 14;
+input double           InpADXTrend          = 25.0;
+input double           InpADXRange          = 20.0;
+input int              InpATRPeriod         = 14;
+input double           InpBBWidthRangeMax   = 0.012;
+input int              InpMAFast            = 20;
+input int              InpMASlow            = 50;
 
-input group "=== 趋势策略 ==="
-input double        InpTrendSL_ATR       = 1.5;         // 止损 = ATR ×
-input double        InpTrendTP_ATR       = 2.5;         // 止盈 = ATR ×
+input group "=== 趋势 / 震荡 ==="
+input double           InpTrendSL_ATR       = 1.5;
+input double           InpTrendTP_ATR       = 2.5;
+input int              InpRSIPeriod         = 14;
+input double           InpRSIOversold       = 30.0;
+input double           InpRSIOverbought     = 70.0;
+input double           InpRangeSL_ATR       = 1.0;
+input double           InpRangeTP_ATR       = 1.2;
 
-input group "=== 震荡策略 ==="
-input int           InpRSIPeriod         = 14;          // RSI 周期
-input double        InpRSIOversold       = 30.0;        // RSI 超卖
-input double        InpRSIOverbought     = 70.0;        // RSI 超买
-input double        InpRangeSL_ATR       = 1.0;         // 止损 = ATR ×
-input double        InpRangeTP_ATR       = 1.2;         // 止盈 = ATR ×（若无中轨则用）
+input group "=== 选择性入场（质量>频率）==="
+input int              InpMinQuality        = 60;     // 最低质量分(可被风险档覆盖)
+input int              InpMaxTradesDay      = 3;      // 日最大开仓次数
+input int              InpCooldownBars      = 4;      // 成交后冷却K线
+input double           InpMaxSpread         = 0.50;   // 最大点差(价格, XAU)
+input bool             InpPreferLondonNY    = true;   // 优先伦敦/纽约窗口
 
-input group "=== 风控 ==="
-input bool          InpUseFixedLot       = true;        // true=固定手数 / false=按风险%
-input double        InpFixedLot          = 0.01;        // 固定手数
-input double        InpRiskPercent       = 0.5;         // 单笔风险占净值%
-input double        InpMaxDailyLossPct   = 3.0;         // 日内最大亏损%
-input int           InpMaxPositions      = 1;           // 同品种最大持仓数
+input group "=== 仓位管理（开仓即保护）==="
+input bool             InpUseBreakeven      = true;
+input double           InpBETriggerATR      = 1.0;    // 浮盈达N×ATR→保本
+input double           InpBELockATR         = 0.10;   // 保本锁定
+input bool             InpUseTrailing       = true;
+input double           InpTrailStartATR     = 1.5;
+input double           InpTrailStepATR      = 0.80;
+input bool             InpUseMomentumExit   = true;   // 动能减弱离场
+input int              InpMaxHoldMinutes    = 240;    // 最长持仓分钟(0不限)
+input bool             InpUsePartialClose   = true;
+input double           InpPartialAtATR      = 1.2;
+input double           InpPartialPercent    = 50.0;
+
+input group "=== 风控覆盖（Money≠AUTO时生效为主）==="
+input double           InpFixedLot          = 0.01;
+input double           InpRiskPercent       = 0.75;
+input double           InpLotPer1k          = 0.02;
+input double           InpMaxDailyLossPct   = 2.5;
+input double           InpMaxEquityDDPct    = 10.0;
+input int              InpMaxPositions      = 1;      // 禁止网格: 建议1
 
 input group "=== 会话过滤（服务器时间）==="
-input bool          InpUseSessionFilter  = true;        // 启用交易时段过滤
-input int           InpSessionStartHour  = 8;           // 开始小时
-input int           InpSessionEndHour    = 22;          // 结束小时（不含）
+input bool             InpUseSessionFilter  = true;
+input int              InpSessionStartHour  = 8;
+input int              InpSessionEndHour    = 22;
 
-//======================== 全局模块 ========================
-SRuntimeParams   g_params;
-CRegimeDetector  g_regime;
-CTrendStrategy   g_trend;
-CRangeStrategy   g_range;
-CRiskManager     g_risk;
-CTradeManager    g_trade;
-CParamPanel      g_panel;
+//======================== 模块 ========================
+SRuntimeParams      g_params;
+CRegimeDetector     g_regime;
+CTrendStrategy      g_trend;
+CRangeStrategy      g_range;
+CRiskManager        g_risk;
+CSelectivityFilter  g_filter;
+CPositionManager    g_posman;
+CTradeManager       g_trade;
+CParamPanel         g_panel;
 
-datetime         g_last_bar = 0;
-ENUM_MARKET_REGIME g_active_regime = REGIME_UNKNOWN;
-string           g_last_msg = "";
+datetime            g_last_bar = 0;
+ENUM_MARKET_REGIME  g_active_regime = REGIME_UNKNOWN;
 
 //------------------------------------------------------------------
 void BuildParamsFromInputs(SRuntimeParams &p)
   {
    ZeroMemory(p);
-   p.run_mode             = InpRunMode;
-   p.adx_period           = InpADXPeriod;
-   p.adx_trend_threshold  = InpADXTrend;
-   p.adx_range_threshold  = InpADXRange;
-   p.atr_period           = InpATRPeriod;
-   p.bb_width_range_max   = InpBBWidthRangeMax;
-   p.ma_fast              = InpMAFast;
-   p.ma_slow              = InpMASlow;
-   p.trend_sl_atr_mult    = InpTrendSL_ATR;
-   p.trend_tp_atr_mult    = InpTrendTP_ATR;
-   p.rsi_period           = InpRSIPeriod;
-   p.rsi_oversold         = InpRSIOversold;
-   p.rsi_overbought       = InpRSIOverbought;
-   p.range_sl_atr_mult    = InpRangeSL_ATR;
-   p.range_tp_atr_mult    = InpRangeTP_ATR;
-   p.risk_percent         = InpRiskPercent;
-   p.fixed_lot            = InpFixedLot;
-   p.use_fixed_lot        = InpUseFixedLot;
-   p.max_daily_loss_pct   = InpMaxDailyLossPct;
-   p.max_positions        = InpMaxPositions;
-   p.magic                = InpMagic;
-   p.slippage             = InpSlippage;
+   p.run_mode            = InpRunMode;
+   p.money_mode          = InpMoneyMode;
+   p.risk_level          = InpRiskLevel;
+   p.adx_period          = InpADXPeriod;
+   p.adx_trend_threshold = InpADXTrend;
+   p.adx_range_threshold = InpADXRange;
+   p.atr_period          = InpATRPeriod;
+   p.bb_width_range_max  = InpBBWidthRangeMax;
+   p.ma_fast             = InpMAFast;
+   p.ma_slow             = InpMASlow;
+   p.trend_sl_atr_mult   = InpTrendSL_ATR;
+   p.trend_tp_atr_mult   = InpTrendTP_ATR;
+   p.rsi_period          = InpRSIPeriod;
+   p.rsi_oversold        = InpRSIOversold;
+   p.rsi_overbought      = InpRSIOverbought;
+   p.range_sl_atr_mult   = InpRangeSL_ATR;
+   p.range_tp_atr_mult   = InpRangeTP_ATR;
+   p.min_quality_score   = InpMinQuality;
+   p.max_trades_per_day  = InpMaxTradesDay;
+   p.cooldown_bars       = InpCooldownBars;
+   p.max_spread_price    = InpMaxSpread;
+   p.prefer_london_ny    = InpPreferLondonNY;
+   p.use_breakeven       = InpUseBreakeven;
+   p.be_trigger_atr      = InpBETriggerATR;
+   p.be_lock_atr         = InpBELockATR;
+   p.use_trailing        = InpUseTrailing;
+   p.trail_start_atr     = InpTrailStartATR;
+   p.trail_step_atr      = InpTrailStepATR;
+   p.use_momentum_exit   = InpUseMomentumExit;
+   p.max_hold_minutes    = InpMaxHoldMinutes;
+   p.use_partial_close   = InpUsePartialClose;
+   p.partial_at_atr      = InpPartialAtATR;
+   p.partial_percent     = InpPartialPercent;
+   p.fixed_lot           = InpFixedLot;
+   p.risk_percent        = InpRiskPercent;
+   p.balance_lot_per_1k  = InpLotPer1k;
+   p.max_daily_loss_pct  = InpMaxDailyLossPct;
+   p.max_equity_dd_pct   = InpMaxEquityDDPct;
+   p.max_positions       = MathMax(1, InpMaxPositions);
+   p.allow_martingale    = false;
+   p.magic               = InpMagic;
+   p.slippage            = InpSlippage;
+
+   // 八档自动：用预设覆盖风险相关字段
+   if(p.money_mode == MM_AUTO_LEVEL)
+      ApplyRiskLevelToParams(p);
   }
 
 //------------------------------------------------------------------
-bool ApplyRuntimeParams(const SRuntimeParams &p, const bool rebuild_indicators)
+bool ApplyRuntimeParams(const SRuntimeParams &p, const bool rebuild)
   {
    g_params = p;
+   g_params.allow_martingale = false;
+   if(g_params.money_mode == MM_AUTO_LEVEL)
+      ApplyRiskLevelToParams(g_params);
+
    g_risk.Configure(g_params);
+   g_filter.Configure(g_params);
    g_trade.Configure(g_params);
 
-   if(rebuild_indicators)
+   if(rebuild)
      {
-      if(!g_regime.Configure(g_params))
-         return false;
-      if(!g_trend.Configure(g_params))
-         return false;
-      if(!g_range.Configure(g_params))
-         return false;
+      if(!g_regime.Configure(g_params)) return false;
+      if(!g_trend.Configure(g_params))  return false;
+      if(!g_range.Configure(g_params))  return false;
+      if(!g_posman.Configure(g_params)) return false;
+     }
+   else
+     {
+      // 仓位管理参数也可热更新
+      g_posman.Configure(g_params);
      }
    return true;
   }
@@ -127,7 +182,6 @@ bool InTradingSession(void)
       return true;
    if(InpSessionStartHour < InpSessionEndHour)
       return (dt.hour >= InpSessionStartHour && dt.hour < InpSessionEndHour);
-   // 跨日
    return (dt.hour >= InpSessionStartHour || dt.hour < InpSessionEndHour);
   }
 
@@ -139,7 +193,6 @@ ENUM_MARKET_REGIME ResolveEffectiveRegime(const ENUM_MARKET_REGIME detected)
       case MODE_TREND: return REGIME_TREND;
       case MODE_RANGE: return REGIME_RANGE;
       case MODE_FLAT:  return REGIME_UNKNOWN;
-      case MODE_AUTO:
       default:         return detected;
      }
   }
@@ -147,16 +200,19 @@ ENUM_MARKET_REGIME ResolveEffectiveRegime(const ENUM_MARKET_REGIME detected)
 //------------------------------------------------------------------
 void UpdateStatusUI(const string extra = "")
   {
-   string line = StringFormat("%s | 模式=%s | 识别=%s | 生效=%s | 日盈亏=%.2f%%",
+   string line = StringFormat("%s | %s/%s | 生效=%s | 日%.2f%% 回撤%.2f%% | 今日单%d",
                               g_regime.Diagnostics(),
                               ModeToString(g_params.run_mode),
-                              RegimeToString(g_regime.LastRegime()),
+                              RiskLevelToString(g_params.risk_level),
                               RegimeToString(g_active_regime),
-                              g_risk.DayPnLPercent());
+                              g_risk.DayPnLPercent(),
+                              g_risk.EquityDDPercent(),
+                              g_filter.DayTrades());
    if(StringLen(extra) > 0)
       line += " | " + extra;
-   g_last_msg = line;
-   Comment(line);
+   Comment(line +
+           "\n无网格·无马丁·独立止损·保本/追踪/动能离场 | " +
+           MoneyModeToString(g_params.money_mode));
    if(InpShowPanel)
       g_panel.SetStatus(line);
   }
@@ -184,12 +240,17 @@ void ProcessNewBar(void)
      }
 
    SSignalResult sig;
-   ZeroMemory(sig);
+   InitSignal(sig);
 
    if(g_active_regime == REGIME_TREND)
       sig = g_trend.Evaluate();
    else if(g_active_regime == REGIME_RANGE)
       sig = g_range.Evaluate();
+   else
+     {
+      UpdateStatusUI("体制未知，等待");
+      return;
+     }
 
    if(sig.signal == SIGNAL_NONE)
      {
@@ -201,37 +262,43 @@ void ProcessNewBar(void)
    if(g_trade.OpenBySignal(sig, msg))
       UpdateStatusUI(msg);
    else
-      UpdateStatusUI(msg);
+      UpdateStatusUI(msg); // 含“等待更好机会”等选择性拒绝
   }
 
 //------------------------------------------------------------------
 int OnInit()
   {
+   // 提醒：对冲账户更匹配独立仓位管理
+   const long margin_mode = AccountInfoInteger(ACCOUNT_MARGIN_MODE);
+   if(margin_mode != ACCOUNT_MARGIN_MODE_RETAIL_HEDGING)
+      Print("提示: 建议使用对冲(Hedging)账户；净额账户下买卖会相互抵消。");
+
    BuildParamsFromInputs(g_params);
 
-   if(!g_regime.Init(_Symbol, PERIOD_CURRENT, g_params))
-      return INIT_FAILED;
-   if(!g_trend.Init(_Symbol, PERIOD_CURRENT, g_params))
-      return INIT_FAILED;
-   if(!g_range.Init(_Symbol, PERIOD_CURRENT, g_params))
-      return INIT_FAILED;
+   if(!g_regime.Init(_Symbol, PERIOD_CURRENT, g_params)) return INIT_FAILED;
+   if(!g_trend.Init(_Symbol, PERIOD_CURRENT, g_params))  return INIT_FAILED;
+   if(!g_range.Init(_Symbol, PERIOD_CURRENT, g_params))  return INIT_FAILED;
+   if(!g_posman.Init(_Symbol, PERIOD_CURRENT, g_params)) return INIT_FAILED;
 
    g_risk.Init(_Symbol, g_params);
-   g_trade.Init(_Symbol, GetPointer(g_risk), g_params);
+   g_filter.Init(_Symbol, PERIOD_CURRENT, g_params);
+   g_trade.Init(_Symbol, GetPointer(g_risk), GetPointer(g_filter), g_params);
 
    if(InpShowPanel)
      {
       if(!g_panel.Create(ChartID(), g_params))
-         Print("参数面板创建失败，仍可使用 EA 属性面板调参");
+         Print("控制台创建失败，仍可用 EA 属性调参");
      }
 
    g_last_bar = iTime(_Symbol, PERIOD_CURRENT, 0);
    g_regime.Evaluate(true);
    g_active_regime = ResolveEffectiveRegime(g_regime.LastRegime());
-   UpdateStatusUI("已启动");
+   UpdateStatusUI("已启动 v2");
 
-   PrintFormat("GoldFX_Intraday 启动 | %s %s | 模式=%s",
-               _Symbol, EnumToString(Period()), ModeToString(g_params.run_mode));
+   PrintFormat("GoldFX_Intraday v2 | %s %s | %s | %s | 无网格无马丁",
+               _Symbol, EnumToString(Period()),
+               MoneyModeToString(g_params.money_mode),
+               RiskLevelToString(g_params.risk_level));
    return INIT_SUCCEEDED;
   }
 
@@ -243,17 +310,26 @@ void OnDeinit(const int reason)
    g_regime.Release();
    g_trend.Release();
    g_range.Release();
+   g_posman.Release();
   }
 
 //------------------------------------------------------------------
 void OnTick()
   {
-   // 面板事件驱动的请求（平仓 / 应用参数）在 OnChartEvent 处理；
-   // 这里只做新 K 线逻辑，降低 Tick 负担。
+   // 持仓管理：每个 Tick 独立评估（保本/追踪/动能/超时）
+   if(g_risk.CountOurPositions() > 0)
+      g_posman.ManageAll();
+
+   // 回撤保护触发时主动减仓
+   if(g_risk.EquityDrawdownExceeded() && g_risk.CountOurPositions() > 0)
+     {
+      g_trade.CloseAll("净值回撤保护");
+      UpdateStatusUI("已触发净值回撤保护平仓");
+     }
+
    const datetime bar = iTime(_Symbol, PERIOD_CURRENT, 0);
    if(bar == g_last_bar)
      {
-      // 轻量刷新状态（非必要可不每 Tick）
       static datetime last_ui = 0;
       if(TimeCurrent() - last_ui >= 5)
         {
@@ -276,12 +352,19 @@ void OnChartEvent(const int id, const long &lparam, const double &dparam, const 
    if(!g_panel.HandleChartEvent(id, lparam, dparam, sparam))
       return;
 
-   // 模式切换：立即生效，无需重建指标
    if(g_panel.ConsumeModeChanged())
      {
       g_params = g_panel.Params();
       g_active_regime = ResolveEffectiveRegime(g_regime.LastRegime());
       UpdateStatusUI("模式已切换");
+     }
+
+   if(g_panel.ConsumeRiskChanged())
+     {
+      SRuntimeParams p = g_panel.Params();
+      ApplyRuntimeParams(p, false);
+      g_panel.SetParams(g_params);
+      UpdateStatusUI("风险/资金管理已更新");
      }
 
    if(g_panel.ConsumeCloseRequest())
@@ -293,7 +376,6 @@ void OnChartEvent(const int id, const long &lparam, const double &dparam, const 
    if(g_panel.ConsumeApplyRequest())
      {
       SRuntimeParams p = g_panel.Params();
-      // 面板已把编辑框写入 Params；模式以面板为准
       if(!ApplyRuntimeParams(p, true))
         {
          UpdateStatusUI("参数应用失败");
@@ -302,7 +384,7 @@ void OnChartEvent(const int id, const long &lparam, const double &dparam, const 
       g_panel.SetParams(g_params);
       g_regime.Evaluate(true);
       g_active_regime = ResolveEffectiveRegime(g_regime.LastRegime());
-      UpdateStatusUI("参数已应用并重识别");
+      UpdateStatusUI("参数已应用");
      }
 
    if(g_panel.ConsumeRefreshRequest())
@@ -318,10 +400,6 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
                         const MqlTradeRequest &request,
                         const MqlTradeResult &result)
   {
-   // 预留：可在此记录成交、统计胜率、推送通知
-   if(trans.type == TRADE_TRANSACTION_DEAL_ADD)
-     {
-      // PrintFormat("成交 deal=%I64u", trans.deal);
-     }
+   // 预留绩效统计
   }
 //+------------------------------------------------------------------+

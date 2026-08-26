@@ -1,5 +1,5 @@
 //+------------------------------------------------------------------+
-//| TrendStrategy.mqh — 趋势策略（EMA 交叉 + ADX 过滤）                 |
+//| TrendStrategy.mqh — 选择性趋势：EMA交叉 + ADX/DI/斜率质量评分       |
 //+------------------------------------------------------------------+
 #property copyright "GoldFX Intraday Framework"
 #property strict
@@ -97,30 +97,32 @@ public:
    SSignalResult Evaluate(void)
      {
       SSignalResult r;
-      r.signal = SIGNAL_NONE;
-      r.entry  = 0;
-      r.sl     = 0;
-      r.tp     = 0;
-      r.reason = "";
+      InitSignal(r);
 
       datetime bar = iTime(m_symbol, m_tf, 0);
       if(bar == m_last_signal_bar)
          return r;
 
-      double ma_f[], ma_s[], atr[], adx[];
-      if(!CopyBuf(m_ma_fast_h, 0, 4, ma_f) ||
-         !CopyBuf(m_ma_slow_h, 0, 4, ma_s) ||
+      double ma_f[], ma_s[], atr[], adx[], plus_di[], minus_di[];
+      if(!CopyBuf(m_ma_fast_h, 0, 5, ma_f) ||
+         !CopyBuf(m_ma_slow_h, 0, 5, ma_s) ||
          !CopyBuf(m_atr_h, 0, 3, atr) ||
-         !CopyBuf(m_adx_h, 0, 3, adx))
+         !CopyBuf(m_adx_h, 0, 3, adx) ||
+         !CopyBuf(m_adx_h, 1, 3, plus_di) ||
+         !CopyBuf(m_adx_h, 2, 3, minus_di))
          return r;
 
-      // 使用已收盘 K：索引 1 / 2 交叉
       const bool cross_up   = (ma_f[2] <= ma_s[2] && ma_f[1] > ma_s[1]);
       const bool cross_down = (ma_f[2] >= ma_s[2] && ma_f[1] < ma_s[1]);
 
+      if(!cross_up && !cross_down)
+        {
+         r.reason = "等待趋势交叉";
+         return r;
+        }
       if(adx[1] < m_adx_min)
         {
-         r.reason = "ADX不足，趋势信号过滤";
+         r.reason = "ADX不足，跳过低质量趋势";
          return r;
         }
 
@@ -132,22 +134,40 @@ public:
       if(!SymbolInfoTick(m_symbol, tick))
          return r;
 
+      // 质量评分：ADX 强度、DI 方向一致、均线分离、交叉后动量
+      int q = 40;
+      if(adx[1] >= m_adx_min + 5.0)  q += 15;
+      else if(adx[1] >= m_adx_min)   q += 8;
+      if(adx[1] > adx[2])            q += 10; // ADX 上升
+
+      const double sep = MathAbs(ma_f[1] - ma_s[1]);
+      if(sep > atr_v * 0.3)          q += 10;
+      if(sep > atr_v * 0.6)          q += 5;
+
       if(cross_up)
         {
+         if(plus_di[1] > minus_di[1]) q += 15;
+         if(ma_f[1] > ma_f[2])        q += 5;
          r.signal = SIGNAL_BUY;
          r.entry  = tick.ask;
          r.sl     = NormalizePrice(r.entry - atr_v * m_sl_mult);
          r.tp     = NormalizePrice(r.entry + atr_v * m_tp_mult);
-         r.reason = StringFormat("趋势多: EMA%d上穿EMA%d ADX=%.1f", m_ma_fast, m_ma_slow, adx[1]);
+         r.atr    = atr_v;
+         r.quality = MathMin(100, q);
+         r.reason = StringFormat("趋势多 EMA交叉 ADX=%.1f Q=%d", adx[1], r.quality);
          m_last_signal_bar = bar;
         }
       else if(cross_down)
         {
+         if(minus_di[1] > plus_di[1]) q += 15;
+         if(ma_f[1] < ma_f[2])        q += 5;
          r.signal = SIGNAL_SELL;
          r.entry  = tick.bid;
          r.sl     = NormalizePrice(r.entry + atr_v * m_sl_mult);
          r.tp     = NormalizePrice(r.entry - atr_v * m_tp_mult);
-         r.reason = StringFormat("趋势空: EMA%d下穿EMA%d ADX=%.1f", m_ma_fast, m_ma_slow, adx[1]);
+         r.atr    = atr_v;
+         r.quality = MathMin(100, q);
+         r.reason = StringFormat("趋势空 EMA交叉 ADX=%.1f Q=%d", adx[1], r.quality);
          m_last_signal_bar = bar;
         }
       return r;
