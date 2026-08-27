@@ -1,0 +1,10 @@
+; GoldFX 期现对比指标 — XAUUSD.s vs GC
+InpSpotSymbol=XAUUSD.s
+InpFutSymbol=GC
+InpLookback=60
+InpEntryZ=2.0
+InpExitZ=0.40
+InpSpreadMode=0
+InpMinBars=120
+InpMaxDrawBars=400
+InpDrawTwinK=true

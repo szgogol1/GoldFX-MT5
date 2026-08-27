@@ -1,4 +1,4 @@
-; GoldFX 基差套利 — XAUUSD.s vs GC（请按经纪商核对代码）
+; GoldFX MT4 — XAUUSD.s vs GC，默认手动观察
 InpSpotSymbol=XAUUSD.s
 InpFutSymbol=GC
 InpTF=15
