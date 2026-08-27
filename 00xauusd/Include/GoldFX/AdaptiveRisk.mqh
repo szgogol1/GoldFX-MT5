@@ -10,6 +10,8 @@
 #include "Common.mqh"
 #include "Persistence.mqh"
 
+const int GOLDFX_ADAPTIVE_ROLL_MAX = 20;
+
 class CAdaptiveRisk
   {
 private:
@@ -23,7 +25,6 @@ private:
    int               m_roll_trades;
    double            m_mult;          // 综合乘数
    CPersistence     *m_persist;
-   static const int  ROLL_MAX = 20;
 
 public:
                      CAdaptiveRisk(void)
@@ -65,7 +66,7 @@ public:
    void OnTradeClosed(const bool win)
      {
       // 滚动窗口近似：超过 20 笔时按比例衰减
-      if(m_roll_trades >= ROLL_MAX)
+      if(m_roll_trades >= GOLDFX_ADAPTIVE_ROLL_MAX)
         {
          m_roll_wins   = (int)MathRound(m_roll_wins * 0.9);
          m_roll_trades = (int)MathRound(m_roll_trades * 0.9);
