@@ -3,8 +3,8 @@
 //| 七条件入场 · 多品种组合 · 自适应风险 · Telegram · 仪表盘 · 持久化  |
 //+------------------------------------------------------------------+
 #property copyright "GoldFX Intraday Framework"
-#property version   "3.00"
-#property description "七条件缺一不可+多品种+自适应风险+Telegram+仪表盘+无网格无马丁"
+#property version   "3.10"
+#property description "七条件回调入场+ADX+结构止损 · 多品种 · 自适应风险"
 
 #include <GoldFX/Common.mqh>
 #include <GoldFX/Persistence.mqh>
@@ -30,24 +30,31 @@ input bool                 InpShowDashboard  = true;
 input bool                 InpAllowTrade     = true;
 input int                  InpMagic          = 20260826;
 input int                  InpSlippage       = 30;
-input int                  InpMinBars        = 520;              // 最小K线保护
+input int                  InpMinBars        = 300;              // 最小K线保护
 
-input group "=== 七条件（SafeScalper 风格）==="
-input int                  InpScEmaFast      = 150;
-input int                  InpScEmaSlow      = 510;
-input double               InpScMinGapATR    = 0.35;
-input int                  InpScBreakBars    = 20;
-input double               InpScBreakBufATR  = 0.10;
+input group "=== 七条件（v3.1 回调优化）==="
+input int                  InpScEmaFast      = 89;
+input int                  InpScEmaSlow      = 233;
+input double               InpScMinGapATR    = 0.25;
+input int                  InpScBreakBars    = 12;
+input double               InpScBreakBufATR  = 0.08;
 input int                  InpRSIPeriod      = 14;
-input double               InpScRsiLLo       = 40;
-input double               InpScRsiLHi       = 65;
-input double               InpScRsiSLo       = 35;
-input double               InpScRsiSHi       = 60;
+input double               InpScRsiLLo       = 45;
+input double               InpScRsiLHi       = 58;
+input double               InpScRsiSLo       = 42;
+input double               InpScRsiSHi       = 55;
 input bool                 InpScUseHTF       = true;
 input int                  InpScHtfFast      = 50;
 input int                  InpScHtfSlow      = 200;
-input double               InpScSLATR        = 1.5;
-input double               InpScTPATR        = 2.0;
+input double               InpScSLATR        = 1.2;
+input double               InpScTPATR        = 2.8;
+input double               InpScMinADX       = 22.0;
+input double               InpScMaxExtATR    = 1.30;
+input bool                 InpScUsePullback  = true;
+input int                  InpScPullbackBars = 4;
+input int                  InpScSwingSLBars  = 8;
+input double               InpScMinRR        = 1.8;
+input double               InpScSLATRMax     = 1.8;
 input int                  InpATRPeriod      = 14;
 
 input group "=== 体制引擎备用参数 ==="
@@ -65,9 +72,9 @@ input double               InpRangeSL        = 1.0;
 input double               InpRangeTP        = 1.2;
 
 input group "=== 选择性与过滤器 ==="
-input int                  InpMinQuality     = 60;
-input int                  InpMaxTradesDay   = 3;
-input int                  InpCooldownBars   = 4;
+input int                  InpMinQuality     = 65;
+input int                  InpMaxTradesDay   = 2;
+input int                  InpCooldownBars   = 6;
 input double               InpMaxSpread      = 0.50;
 input bool                 InpPreferLNY      = true;
 input bool                 InpUseNews        = true;
@@ -81,16 +88,16 @@ input int                  InpSessEnd        = 20;
 
 input group "=== 仓位管理 ==="
 input bool                 InpBE             = true;
-input double               InpBETrig         = 1.0;
-input double               InpBELock         = 0.10;
+input double               InpBETrig         = 1.2;
+input double               InpBELock         = 0.15;
 input bool                 InpTrail          = true;
-input double               InpTrailStart     = 1.5;
-input double               InpTrailStep      = 0.80;
+input double               InpTrailStart     = 2.0;
+input double               InpTrailStep      = 1.0;
 input bool                 InpMomExit        = true;
-input int                  InpMaxHoldMin     = 240;
+input int                  InpMaxHoldMin     = 360;
 input bool                 InpPartial        = true;
-input double               InpPartialATR     = 1.2;
-input double               InpPartialPct     = 50.0;
+input double               InpPartialATR     = 2.0;
+input double               InpPartialPct     = 40.0;
 
 input group "=== 风控 / 自适应 / 组合 ==="
 input double               InpFixedLot       = 0.01;
@@ -136,6 +143,10 @@ bool ValidateInputs(string &err)
      { err="七条件 EMA 周期无效"; return false; }
    if(InpScMinGapATR <= 0 || InpScBreakBars < 3)
      { err="突破/间距参数无效"; return false; }
+   if(InpScMinRR < 1.0 || InpScMinRR > 5.0)
+     { err="最低盈亏比需在 [1,5]"; return false; }
+   if(InpScMinADX < 10.0 || InpScMaxExtATR < 0.3)
+     { err="ADX/延伸参数无效"; return false; }
    if(InpScRsiLLo >= InpScRsiLHi || InpScRsiSLo >= InpScRsiSHi)
      { err="RSI 区间无效"; return false; }
    if(InpRiskPct <= 0 || InpRiskPct > 10)
@@ -178,6 +189,13 @@ void BuildParams(SRuntimeParams &p)
    p.sc_htf_slow = InpScHtfSlow;
    p.sc_sl_atr = InpScSLATR;
    p.sc_tp_atr = InpScTPATR;
+   p.sc_min_adx = InpScMinADX;
+   p.sc_max_ext_atr = InpScMaxExtATR;
+   p.sc_use_pullback = InpScUsePullback;
+   p.sc_pullback_bars = InpScPullbackBars;
+   p.sc_swing_sl_bars = InpScSwingSLBars;
+   p.sc_min_rr = InpScMinRR;
+   p.sc_sl_atr_max = InpScSLATRMax;
    p.atr_period = InpATRPeriod;
 
    p.adx_period = InpADXPeriod;
@@ -265,10 +283,11 @@ void ApplyParams(const SRuntimeParams &p, const bool rebuild_portfolio)
 //------------------------------------------------------------------
 string SevenFlags(const SSevenCondSnapshot &s)
   {
-   return StringFormat("七条件 %s%s%s%s%s%s%s | EMA%.1f/%.1f gapATR=%.2f RSI=%.1f",
+   return StringFormat("条件 %s%s%s%s%s%s%s ADX=%s EXT=%s | EMA%.1f/%.1f gap=%.2f RSI=%.1f ADX=%.1f ext=%.2f",
                        s.ema_trend?"1":"-", s.ema_strength?"2":"-", s.price_pos?"3":"-",
                        s.breakout?"4":"-", s.rsi_ok?"5":"-", s.momentum?"6":"-", s.htf_ok?"7":"-",
-                       s.ema_fast, s.ema_slow, s.ema_gap_atr, s.rsi);
+                       s.adx_ok?"Y":"N", s.not_extended?"Y":"N",
+                       s.ema_fast, s.ema_slow, s.ema_gap_atr, s.rsi, s.adx, s.ext_atr);
   }
 
 //------------------------------------------------------------------

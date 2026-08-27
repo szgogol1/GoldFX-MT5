@@ -40,15 +40,19 @@ struct SSevenCondSnapshot
    bool   ema_trend;
    bool   ema_strength;
    bool   price_pos;
-   bool   breakout;
+   bool   breakout;       // 入场触发（回调或突破）
    bool   rsi_ok;
    bool   momentum;
    bool   htf_ok;
+   bool   adx_ok;         // ADX 趋势强度
+   bool   not_extended;   // 未过度延伸
    double ema_fast;
    double ema_slow;
    double ema_gap_atr;
    double rsi;
    double atr;
+   double adx;
+   double ext_atr;        // 价格距快EMA的ATR倍数
    string fail_reason;
   };
 
@@ -102,6 +106,13 @@ struct SRuntimeParams
    int    sc_htf_slow;          // H1 EMA200
    double sc_sl_atr;
    double sc_tp_atr;
+   double sc_min_adx;           // 最低 ADX（过滤弱趋势）
+   double sc_max_ext_atr;       // 最大延伸（防追涨杀跌）
+   bool   sc_use_pullback;      // true=回调入场 false=突破入场
+   int    sc_pullback_bars;     // 回调检测窗口
+   int    sc_swing_sl_bars;     // 结构止损摆动窗口
+   double sc_min_rr;            // 最低盈亏比
+   double sc_sl_atr_max;        // SL 最大 ATR 倍数
    // 选择性 / 过滤器
    int    min_quality_score;
    int    max_trades_per_day;

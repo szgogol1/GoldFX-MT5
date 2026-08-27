@@ -146,7 +146,7 @@ public:
               }
            }
 
-         if(m_use_mom_exit && profit_price > atr_v*0.3 && adx1 < adx2 && adx1 < 22.0 && profit_price < atr_v*0.6)
+         if(m_use_mom_exit && profit_price > atr_v*0.5 && adx1 < adx2 && adx1 < 20.0 && profit_price < atr_v*0.8)
            {
             if(m_trade.PositionClose(ticket)) { actions++; PrintFormat("动能离场 %s #%I64u", symbol, ticket); }
             continue;
@@ -171,7 +171,8 @@ public:
             double new_sl = is_buy ? open + atr_v*m_be_lock : open - atr_v*m_be_lock;
             new_sl = NormalizePriceSym(new_sl, symbol);
             bool improve = is_buy ? (new_sl>sl || sl==0) : (new_sl<sl || sl==0);
-            if(improve && ModifySL(ticket, new_sl, tp))
+            // 仅在盈利足够时移保本，避免过早被震出
+            if(profit_price >= atr_v*(m_be_trigger+0.15) && improve && ModifySL(ticket, new_sl, tp))
               { Mark(m_be_done, ticket); actions++; }
            }
 
@@ -180,9 +181,11 @@ public:
             double new_sl = is_buy ? pos.PriceCurrent()-atr_v*m_trail_step
                                    : pos.PriceCurrent()+atr_v*m_trail_step;
             new_sl = NormalizePriceSym(new_sl, symbol);
-            double gap = atr_v*0.15;
+            double gap = atr_v*0.20;
             bool improve = is_buy ? (new_sl > sl+gap || (sl==0 && new_sl>open))
                                   : (new_sl < sl-gap || (sl==0 && new_sl<open));
+            // 趋势强时放宽追踪，给利润奔跑空间
+            if(adx1 >= 28.0) gap = atr_v*0.10;
             if(improve && ModifySL(ticket, new_sl, tp)) actions++;
            }
 
