@@ -15,7 +15,7 @@ GitHub：https://github.com/szgogol1/GoldFX-MT5
 参考 **SafeScalperPro / Prime** 的工程能力，在自有框架上实现：
 
 - **七条件缺一不可**入场（EMA 趋势/强度/价格位置/突破/RSI/动量/H1 确认）
-- **黄金现货–期货基差均值回归套利**（Z 分双边对冲）
+- **黄金现货–期货基差均值回归套利**（Z 分双边对冲 + 双K对比图 + 价差提醒）
 - **无网格 · 无马丁 · 一次一笔/每品种一笔**
 - **自适应风险引擎**（回撤降仓、ATR 反比、滚动胜率调整）
 - **单图多品种**（最多 8，CSV 配置）+ **相关性保护**
@@ -25,7 +25,7 @@ GitHub：https://github.com/szgogol1/GoldFX-MT5
 
 > 非官方克隆。研究与模拟用途。实盘前请充分测试。
 
-## 黄金期货 / 现货基差套利（`GoldFX_BasisArb`）
+## 黄金期货 / 现货基差套利（`GoldFX_BasisArb` + `GoldFX_BasisCompare`）
 
 ### 原理
 
@@ -38,22 +38,30 @@ Z_t = \frac{B_t - \mu_B}{\sigma_B}
 - \(F\)：期货/远期类黄金（经纪商符号因平台而异，如 `XAUUSD.f`、`GOLDfut`、`XAUz`）  
 - \(\mu_B,\sigma_B\)：近 `Lookback` 根 K 线滚动均值与标准差  
 
-| 信号 | 条件 | 仓位 |
+| 信号 | 条件 | 仓位 / 提醒 |
 |------|------|------|
 | 做空基差 | \(Z \ge EntryZ\)（基差过高 / Contango 极端） | **空期货 + 多现货** |
 | 做多基差 | \(Z \le -EntryZ\)（基差过低 / Backwardation 极端） | **多期货 + 空现货** |
-| 回归出场 | \(\|Z\| \le ExitZ\) | 双边平仓 |
-| Z 止损 | 逆向 \(\|Z\| \ge StopZ\) 或超时 | 双边平仓 |
+| 回归出场 | \(\|Z\| \le ExitZ\) **且** 双边浮盈 ≥ `MinProfitMoney` | 双边平仓 / 平仓提醒 |
+| Z 止损 | 逆向 \(\|Z\| \ge StopZ\) 或超时 | 双边平仓（不受最小盈利限制） |
 
 另需：现货–期货滚动相关 \(\ge MinCorr\)；名义价值自动对冲手数；点差/时段/日亏损闸门。
 
-### 使用
+### 双 K 对比指标（`GoldFX_BasisCompare`）
+
+1. 挂在**现货**图表（如 XAUUSD M15）
+2. 设置 `InpFutSymbol` 为你的期货代码
+3. **主图**：叠加期货 K 线（颜色区分涨跌）+ 左上角实时面板（双价 / 基差 / Z）
+4. **副图**：基差曲线、滚动均值、`mean±EntryZ·σ` 上下带；穿越入场带时画箭头
+
+### EA 提醒与交易
 
 1. 确认账户为**对冲模式**，且同时有现货 + 期货类黄金品种  
-2. 编译 `Experts/GoldFX_BasisArb/GoldFX_BasisArb.mq5`  
-3. 设置 `InpFutSymbol` 为你的期货代码（预设里的 `XAUUSD.f` 只是占位）  
-4. 挂在现货图表上，加载 `GoldFX_BasisArb_M15.set` 或 `GoldFX_BasisArb_Conservative.set`  
-5. 建议先 `InpSignalOnly=true` 观察 Z 分与相关，再实盘/模拟下单  
+2. 编译 `Experts/GoldFX_BasisArb/GoldFX_BasisArb.mq5` 与 `Indicators/GoldFX/GoldFX_BasisCompare.mq5`  
+3. 设置 `InpFutSymbol`；推荐先 `InpSignalOnly=true` 只收提醒  
+4. 提醒通道：`Alert` / MT5 推送 / 可选 Telegram  
+5. 加载 `GoldFX_BasisCompare_M15.set` 或 `GoldFX_BasisArb_M15.set`  
+6. 观察稳定后再将 `InpSignalOnly=false` 启用双边自动对冲  
 
 > MT5 策略测试器对**双品种对冲**支持有限；基差策略请以**模拟盘实盘环境**验证为主。
 
@@ -81,24 +89,26 @@ Z_t = \frac{B_t - \mu_B}{\sigma_B}
 
 ```
 Experts/GoldFX_Intraday/GoldFX_Intraday.mq5   # 日内七条件
-Experts/GoldFX_BasisArb/GoldFX_BasisArb.mq5   # 现货-期货基差套利
+Experts/GoldFX_BasisArb/GoldFX_BasisArb.mq5   # 现货-期货基差套利 + 提醒
+Indicators/GoldFX/GoldFX_BasisCompare.mq5     # 期现双K对比 + 基差副图
 Include/GoldFX/
   SevenConditionStrategy.mqh
-  BasisArbitrage.mqh           # 基差 Z 分引擎
+  BasisArbitrage.mqh           # 基差 Z 分引擎（含最小盈利出场）
   PortfolioEngine.mqh / AdaptiveRisk.mqh / ...
 Presets/
   GoldFX_XAUUSD_M5_SevenCond.set
   GoldFX_BasisArb_M15.set
   GoldFX_BasisArb_Conservative.set
+  GoldFX_BasisCompare_M15.set
   ...
 ```
 
 ## 安装
 
-1. 复制到 MT5 `MQL5/Experts` 与 `MQL5/Include/GoldFX`、`MQL5/Presets`  
-2. MetaEditor **F7** 编译两个 EA  
+1. 复制到 MT5 `MQL5/Experts`、`MQL5/Indicators/GoldFX`、`MQL5/Include/GoldFX`、`MQL5/Presets`（或运行 `install_to_MT5.bat`）  
+2. MetaEditor **F7** 编译两个 EA + `GoldFX_BasisCompare` 指标  
 3. 日内策略：挂 **XAUUSD M5**（推荐伦敦–纽约）  
-4. 基差套利：挂现货图，填好期货品种名  
+4. 基差套利：现货图加载指标 + EA，填好期货品种名；先 `SignalOnly`  
 5. Telegram：工具 → 选项 → 专家 → 允许 `https://api.telegram.org`
 
 ## 推荐起步
@@ -111,8 +121,9 @@ Presets/
 | 时段 | `Phase4_Session_DayCap.set` |
 | 黄金即用 | `GoldFX_XAUUSD_M5_SevenCond.set` |
 | 多品种 | `GoldFX_Portfolio_Major.set`（`InpSymbols=XAUUSD,XAGUSD,...`） |
-| 基差套利 | `GoldFX_BasisArb_M15.set`（先改期货品种名） |
+| 基差套利 | `GoldFX_BasisArb_M15.set`（先改期货品种名，默认仅提醒） |
 | 基差保守 | `GoldFX_BasisArb_Conservative.set` |
+| 期现双K图 | 指标 `GoldFX_BasisCompare` + 预设 `GoldFX_BasisCompare_M15.set` |
 
 资金管理默认 **自适应 (MM_ADAPTIVE)**；亦可固定手数 / 风险% / 八档自动。
 

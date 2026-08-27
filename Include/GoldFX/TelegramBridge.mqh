@@ -66,6 +66,13 @@ public:
       m_chat   = p.telegram_chat_id;
      }
 
+   void ConfigureDirect(const bool enable, const string token, const string chat_id)
+     {
+      m_enable = enable && StringLen(token) > 10 && StringLen(chat_id) > 0;
+      m_token  = token;
+      m_chat   = chat_id;
+     }
+
    bool Enabled(void) const { return m_enable; }
 
    bool Send(const string text)

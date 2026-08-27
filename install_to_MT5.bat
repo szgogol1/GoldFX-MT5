@@ -33,16 +33,19 @@ if not exist "%MQL5%" (
 if not exist "%MQL5%\Experts\GoldFX_Intraday" mkdir "%MQL5%\Experts\GoldFX_Intraday"
 if not exist "%MQL5%\Experts\GoldFX_BasisArb" mkdir "%MQL5%\Experts\GoldFX_BasisArb"
 if not exist "%MQL5%\Include\GoldFX" mkdir "%MQL5%\Include\GoldFX"
+if not exist "%MQL5%\Indicators\GoldFX" mkdir "%MQL5%\Indicators\GoldFX"
 if not exist "%MQL5%\Presets" mkdir "%MQL5%\Presets"
 
 xcopy /E /I /Y "%SRC%\Experts\GoldFX_Intraday\*" "%MQL5%\Experts\GoldFX_Intraday\"
 xcopy /E /I /Y "%SRC%\Experts\GoldFX_BasisArb\*" "%MQL5%\Experts\GoldFX_BasisArb\"
 xcopy /E /I /Y "%SRC%\Include\GoldFX\*" "%MQL5%\Include\GoldFX\"
+if exist "%SRC%\Indicators\GoldFX" xcopy /E /I /Y "%SRC%\Indicators\GoldFX\*" "%MQL5%\Indicators\GoldFX\"
 if exist "%SRC%\Presets" xcopy /Y "%SRC%\Presets\*" "%MQL5%\Presets\"
 
 echo.
 echo [OK] Done. Compile in MetaEditor:
 echo   GoldFX_Intraday.mq5
 echo   GoldFX_BasisArb.mq5
+echo   Indicators\GoldFX\GoldFX_BasisCompare.mq5
 pause
 endlocal

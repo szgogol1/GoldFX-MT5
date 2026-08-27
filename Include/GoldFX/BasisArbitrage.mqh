@@ -59,6 +59,7 @@ struct SBasisParams
    int    magic;
    int    slippage;
    int    cooldown_bars;
+   double min_profit_money;  // 回归平仓前最小双边浮盈（账户货币）；0=不要求
   };
 
 class CBasisArbitrage
@@ -133,6 +134,7 @@ public:
                       m_p.auto_hedge = true;
                       m_p.trade_both_legs = true;
                       m_p.spread_mode = BASIS_DIFF;
+                      m_p.min_profit_money = 5.0;
                      }
 
    SBasisSnapshot Snapshot(void) const { return m_snap; }
@@ -180,9 +182,19 @@ public:
    // 刷新统计（每根新 K 调用）；返回是否新棒
    bool Update(const bool new_bar_only=true)
      {
+      // 保留上次滚动统计，供非新棒路径刷新实时 Z（避免 ZeroMemory 后 stdev=0）
+      const double prev_mean  = m_snap.mean;
+      const double prev_stdev = m_snap.stdev;
+      const double prev_corr  = m_snap.corr;
+      const double prev_hr    = m_snap.hedge_ratio;
+
       ZeroMemory(m_snap);
       m_snap.side = m_open_side;
       m_snap.reason = "";
+      m_snap.mean  = prev_mean;
+      m_snap.stdev = prev_stdev;
+      m_snap.corr  = prev_corr;
+      m_snap.hedge_ratio = prev_hr;
 
       const int bars_s = Bars(m_p.spot_symbol, m_p.tf);
       const int bars_f = Bars(m_p.fut_symbol, m_p.tf);
@@ -203,8 +215,13 @@ public:
             m_snap.spot_mid = ms;
             m_snap.fut_mid = mf;
             m_snap.spread = RawSpread(mf, ms);
-            if(m_snap.stdev > 0.0)
-               m_snap.zscore = (m_snap.spread - m_snap.mean) / m_snap.stdev;
+            if(prev_stdev > 1e-12)
+               m_snap.zscore = (m_snap.spread - prev_mean) / prev_stdev;
+            m_snap.reason = "ok";
+            if(m_p.max_spread_spot > 0 && ss > m_p.max_spread_spot)
+               m_snap.reason = "现货点差过大";
+            else if(m_p.max_spread_fut > 0 && sf > m_p.max_spread_fut)
+               m_snap.reason = "期货点差过大";
            }
          return false;
         }
@@ -273,7 +290,8 @@ public:
 
    // 决策：entry / exit / stop / hold
    // out_action: 0=无 1=开空基差 2=开多基差 3=平仓 4=止损平仓
-   int Decide(string &why) const
+   // floating_profit: 双边合计浮盈（账户货币）；回归平仓需 >= min_profit_money
+   int Decide(string &why, const double floating_profit=0.0) const
      {
       why = m_snap.reason;
       if(m_snap.stdev <= 0.0)
@@ -288,7 +306,7 @@ public:
       // 持仓管理
       if(m_open_side != BASIS_FLAT)
         {
-         // 时间止损
+         // 时间止损（不受最小盈利限制）
          if(m_p.max_hold_bars > 0)
            {
             const int held = iBarShift(m_p.spot_symbol, m_p.tf, m_entry_bar_time, true);
@@ -300,10 +318,20 @@ public:
            { why=StringFormat("Z止损 %.2f>=%.2f", z, m_p.stop_z); return 4; }
          if(m_open_side == BASIS_LONG_SPREAD && z <= -m_p.stop_z)
            { why=StringFormat("Z止损 %.2f<=-%.2f", z, m_p.stop_z); return 4; }
-         // 均值回归出场
+         // 均值回归出场：价差收敛且达到最小盈利
          if(MathAbs(z) <= m_p.exit_z)
-           { why=StringFormat("回归出场 |Z|=%.2f<=%.2f", MathAbs(z), m_p.exit_z); return 3; }
-         why = StringFormat("持仓中 Z=%.2f", z);
+           {
+            if(m_p.min_profit_money > 0.0 && floating_profit < m_p.min_profit_money)
+              {
+               why = StringFormat("回归待利 |Z|=%.2f 浮盈%.2f<%.2f",
+                                  MathAbs(z), floating_profit, m_p.min_profit_money);
+               return 0;
+              }
+            why = StringFormat("回归出场 |Z|=%.2f<=%.2f 盈=%.2f",
+                               MathAbs(z), m_p.exit_z, floating_profit);
+            return 3;
+           }
+         why = StringFormat("持仓中 Z=%.2f 盈=%.2f", z, floating_profit);
          return 0;
         }
 

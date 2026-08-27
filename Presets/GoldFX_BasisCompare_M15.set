@@ -1,4 +1,5 @@
-; GoldFX 基差套利 — 现货 XAUUSD vs 期货（请改 InpFutSymbol）
+; GoldFX 期现对比 — 指标/EA 提醒预设（M15）
+; 挂在现货 XAUUSD 图；请改期货品种名
 InpSpotSymbol=XAUUSD
 InpFutSymbol=XAUUSD.f
 InpTF=15
