@@ -1,14 +1,15 @@
 # GoldFX Intraday v3 — 七条件 + 组合基础设施
 
-## Windows 目标目录：`D:\00xauusd\`
+## Windows 安装
 
-完整可部署包在仓库的 [`00xauusd/`](00xauusd/) 目录（或下载 `00xauusd_MT5.zip`）：
+1. 克隆或解压仓库到本机，例如 `D:\GoldFX-MT5\`
+2. 双击 `install_to_MT5.bat`（或 `install_to_MT5.ps1`），粘贴 MT5 的 `MQL5` 路径
+3. MetaEditor 打开 `Experts\GoldFX_Intraday\GoldFX_Intraday.mq5`，按 **F7** 编译
+4. 可选：双击 `open_MetaEditor.bat` 启动 MetaEditor
 
-1. 将 `00xauusd` 文件夹**整体复制/解压到** `D:\00xauusd\`
-2. 双击 `D:\00xauusd\install_to_MT5.bat`，粘贴 MT5 的 `MQL5` 路径完成安装
-3. 详见 `00xauusd/安装说明.txt`
+云端环境无法直接写入你电脑的 `D:` 盘，需本机完成上述步骤。
 
-云端环境无法直接写入你电脑的 `D:` 盘，需本机完成上述复制。
+GitHub：https://github.com/szgogol1/GoldFX-MT5
 
 
 参考 **SafeScalperPro / Prime** 的工程能力，在自有框架上实现：

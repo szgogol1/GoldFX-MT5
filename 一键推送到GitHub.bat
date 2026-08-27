@@ -50,7 +50,7 @@ if errorlevel 1 (
 echo.
 echo [成功] 请打开: https://github.com/szgogol1/GoldFX-MT5
 echo 本机下载到 D 盘:
-echo   git clone https://github.com/szgogol1/GoldFX-MT5.git D:\00xauusd
+echo   git clone https://github.com/szgogol1/GoldFX-MT5.git D:\GoldFX-MT5
 echo.
 pause
 endlocal

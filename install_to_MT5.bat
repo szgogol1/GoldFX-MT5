@@ -4,10 +4,6 @@ setlocal EnableExtensions
 set "SRC=%~dp0"
 if "%SRC:~-1%"=="\" set "SRC=%SRC:~0,-1%"
 
-if exist "%SRC%\00xauusd\Experts\GoldFX_Intraday\GoldFX_Intraday.mq5" (
-  set "SRC=%SRC%\00xauusd"
-)
-
 if not exist "%SRC%\Experts\GoldFX_Intraday\GoldFX_Intraday.mq5" (
   echo [ERROR] Cannot find Experts\GoldFX_Intraday\GoldFX_Intraday.mq5
   echo Tried: %SRC%

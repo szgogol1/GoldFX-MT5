@@ -39,7 +39,7 @@ if ($LASTEXITCODE -eq 0) {
   Write-Host ""
   Write-Host "成功！请打开: https://github.com/szgogol1/GoldFX-MT5" -ForegroundColor Green
   Write-Host "本机下载:" -ForegroundColor Green
-  Write-Host "  git clone https://github.com/szgogol1/GoldFX-MT5.git D:\00xauusd"
+  Write-Host "  git clone https://github.com/szgogol1/GoldFX-MT5.git D:\GoldFX-MT5"
 } else {
   Write-Host ""
   Write-Host "推送失败。常见原因：" -ForegroundColor Red

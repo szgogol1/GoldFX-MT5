@@ -25,7 +25,7 @@
 
 ```powershell
 # 进入工程根目录（按你实际路径改）
-cd D:\00xauusd_repo
+cd D:\GoldFX-MT5_repo
 # 或你 clone / 打开的 GoldFX 项目根目录
 
 git remote remove github 2>$null
@@ -45,19 +45,15 @@ gh repo create szgogol1/GoldFX-MT5 --private --source=. --remote=github --push
 
 ```powershell
 cd D:\
-git clone https://github.com/szgogol1/GoldFX-MT5.git 00xauusd
-cd D:\00xauusd
-# 若仓库根就是部署包：
+git clone https://github.com/szgogol1/GoldFX-MT5.git GoldFX-MT5
+cd D:\GoldFX-MT5
 .\install_to_MT5.bat
-# 若仓库里还有 00xauusd 子目录：
-# Expand 或直接用 D:\00xauusd\00xauusd\install_to_MT5.bat
 ```
 
-仓库结构说明：
+仓库结构（根目录即源码，无重复子目录）：
 
-- 源码在：`Experts/`、`Include/`、`Presets/`
-- 一键部署包在：`00xauusd/`
-- 压缩包：`GoldFX_MT5_安装包.zip`
+- `Experts/`、`Include/`、`Presets/`
+- 安装脚本：`install_to_MT5.bat` / `install_to_MT5.ps1`
 
 ## 一键脚本（可选）
 
