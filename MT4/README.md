@@ -10,30 +10,30 @@
 3. MetaEditor（F4）编译：
    - `Experts\GoldFX_BasisArb.mq4`
    - `Indicators\GoldFX_BasisCompare.mq4`
-4. 在现货图（如 XAUUSD M15）先加载指标，再挂 EA
-5. 设置 `InpFutSymbol` 为你经纪商的黄金期货/远期代码
-6. 推荐先保持 `InpSignalOnly=true` 只收提醒
+4. 打开 **XAUUSD.s** 图表（M15 推荐），加载指标 + EA
+5. 默认品种：现货 `XAUUSD.s`、期货 `GC`（可按经纪商修改）
+6. 默认 **手动观察**（只提醒）；右上角按钮切换为 **自动交易**
 
 Telegram（可选）：工具 → 选项 → 专家顾问 → 允许 WebRequest：`https://api.telegram.org`
 
-## 目录
+## 图表说明
 
-```
-MT4/
-  Experts/GoldFX_BasisArb.mq4          # 基差提醒 / 双边对冲 EA
-  Indicators/GoldFX_BasisCompare.mq4   # 期货K叠加 + 基差副图
-  Include/GoldFX/BasisArbitrage.mqh
-  Include/GoldFX/TelegramBridge.mqh
-  Presets/*.set
-```
+| 区域 | 内容 |
+|------|------|
+| 主图 | 现货/期货 **并排双色 K 线**（金=现货，蓝绿=期货） |
+| 副图 | **价差柱状图**（高于均值绿柱、低于红柱）+ 均值/入场带 |
+
+## 手 / 自动
+
+- **手动观察**：只 Alert/推送/Telegram，不下单 — 先确认信号
+- **自动交易**：按 Z 分双边对冲开平仓
+- 图上右上角 **「模式: 手动观察 / 自动交易」** 一键切换
 
 ## 信号
 
 | 条件 | 动作 |
 |------|------|
-| Z ≥ EntryZ | 提醒空基差（空期+多现） |
-| Z ≤ -EntryZ | 提醒多基差（多期+空现） |
-| \|Z\| ≤ ExitZ 且浮盈 ≥ MinProfit | 提醒平仓 |
-| Z 逆向达 StopZ / 超时 | 止损或超时平仓 |
-
-与 MT5 版逻辑一致；MT4 使用订单系统（OrderSend）下单。
+| Z ≥ EntryZ | 提醒/开仓：空基差（空 GC + 多 XAUUSD.s） |
+| Z ≤ -EntryZ | 提醒/开仓：多基差（多 GC + 空 XAUUSD.s） |
+| \|Z\| ≤ ExitZ 且浮盈 ≥ MinProfit | 平仓提醒/平仓 |
+| StopZ / 超时 | 止损或超时平仓 |

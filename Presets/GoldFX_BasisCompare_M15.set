@@ -1,33 +1,10 @@
-; GoldFX 期现对比 — 指标/EA 提醒预设（M15）
-; 挂在现货 XAUUSD 图；请改期货品种名
-InpSpotSymbol=XAUUSD
-InpFutSymbol=XAUUSD.f
-InpTF=15
-InpSpreadMode=0
+; GoldFX 期现对比指标 — XAUUSD.s vs GC
+InpSpotSymbol=XAUUSD.s
+InpFutSymbol=GC
 InpLookback=60
 InpEntryZ=2.0
 InpExitZ=0.40
-InpStopZ=3.5
-InpMinCorr=0.88
+InpSpreadMode=0
 InpMinBars=120
-InpMaxHoldBars=48
-InpCooldownBars=4
-InpMinProfitMoney=5.0
-InpLotSpot=0.10
-InpAutoHedge=true
-InpMaxDailyLossPct=2.0
-InpMaxSpreadSpot=0.60
-InpMaxSpreadFut=0.80
-InpAllowTrade=true
-InpSignalOnly=true
-InpMagic=20260827
-InpSlippage=40
-InpUseAlert=true
-InpUsePush=true
-InpTelegramEnable=false
-InpShowPanel=true
-InpUseSession=true
-InpSessStart=1
-InpSessEnd=22
-InpFridayCut=true
-InpFridayHour=18
+InpMaxDrawBars=400
+InpDrawTwinK=true

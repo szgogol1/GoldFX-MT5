@@ -1,6 +1,6 @@
-; GoldFX 基差套利 — 现货 XAUUSD vs 期货（请改 InpFutSymbol）
-InpSpotSymbol=XAUUSD
-InpFutSymbol=XAUUSD.f
+; GoldFX 基差套利 — XAUUSD.s vs GC（请按经纪商核对代码）
+InpSpotSymbol=XAUUSD.s
+InpFutSymbol=GC
 InpTF=15
 InpSpreadMode=0
 InpLookback=60
@@ -18,7 +18,7 @@ InpMaxDailyLossPct=2.0
 InpMaxSpreadSpot=0.60
 InpMaxSpreadFut=0.80
 InpAllowTrade=true
-InpSignalOnly=true
+InpStartManual=true
 InpMagic=20260827
 InpSlippage=40
 InpUseAlert=true

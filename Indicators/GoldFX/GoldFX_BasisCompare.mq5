@@ -1,372 +1,255 @@
 //+------------------------------------------------------------------+
-//| GoldFX_BasisCompare.mq5 — 黄金期货/现货双K对比 + 基差/Z副图        |
-//| 主图：期货K线叠加（ChartObjects）；副图：基差带与信号箭头           |
-//| 仅可视化，不下单。配合 GoldFX_BasisArb EA 做提醒/交易。             |
+//| GoldFX_BasisCompare.mq5 — 期现双色并排K线 + 价差柱状图              |
+//| 默认：现货 XAUUSD.s  期货 GC                                        |
 //+------------------------------------------------------------------+
 #property copyright "GoldFX Intraday Framework"
-#property version   "1.00"
-#property description "现货图叠加期货K线；副图显示基差均值带与开平仓标记"
+#property version   "1.20"
+#property description "主图并排双色K线；副图价差柱状图+均值带"
 #property indicator_separate_window
 #property indicator_buffers 8
-#property indicator_plots   6
+#property indicator_plots   7
 
-#property indicator_label1  "Basis"
-#property indicator_type1   DRAW_LINE
-#property indicator_color1  clrDodgerBlue
-#property indicator_style1  STYLE_SOLID
-#property indicator_width1  2
+#property indicator_label1  "价差↑"
+#property indicator_type1   DRAW_HISTOGRAM
+#property indicator_color1  clrMediumSeaGreen
+#property indicator_width1  3
 
-#property indicator_label2  "Mean"
-#property indicator_type2   DRAW_LINE
-#property indicator_color2  clrSilver
-#property indicator_style2  STYLE_DOT
-#property indicator_width2  1
+#property indicator_label2  "价差↓"
+#property indicator_type2   DRAW_HISTOGRAM
+#property indicator_color2  clrTomato
+#property indicator_width2  3
 
-#property indicator_label3  "Upper"
+#property indicator_label3  "均值"
 #property indicator_type3   DRAW_LINE
-#property indicator_color3  clrTomato
-#property indicator_style3  STYLE_DASH
+#property indicator_color3  clrSilver
+#property indicator_style3  STYLE_DOT
 #property indicator_width3  1
 
-#property indicator_label4  "Lower"
+#property indicator_label4  "上带"
 #property indicator_type4   DRAW_LINE
-#property indicator_color4  clrLimeGreen
+#property indicator_color4  clrTomato
 #property indicator_style4  STYLE_DASH
-#property indicator_width4  1
 
-#property indicator_label5  "EntryShort"
-#property indicator_type5   DRAW_ARROW
-#property indicator_color5  clrOrangeRed
-#property indicator_width5  2
+#property indicator_label5  "下带"
+#property indicator_type5   DRAW_LINE
+#property indicator_color5  clrDodgerBlue
+#property indicator_style5  STYLE_DASH
 
-#property indicator_label6  "EntryLong"
+#property indicator_label6  "空基差"
 #property indicator_type6   DRAW_ARROW
-#property indicator_color6  clrLime
+#property indicator_color6  clrOrangeRed
 #property indicator_width6  2
 
-input group "=== 品种 / 模型 ==="
-input string InpFutSymbol   = "";           // 期货/远期（必填，如 XAUUSD.f）
-input int    InpLookback    = 60;           // 滚动窗口
-input double InpEntryZ      = 2.0;          // 入场 |Z|（带宽 = mean±EntryZ·σ）
-input double InpExitZ       = 0.40;         // 出场 |Z|（标记用）
-input int    InpSpreadMode  = 0;            // 0=F-S  1=F/S-1  2=ln(F/S)
-input int    InpMinBars     = 120;          // 最少K线
-input int    InpMaxDrawBars = 400;          // 最多绘制历史根数
+#property indicator_label7  "多基差"
+#property indicator_type7   DRAW_ARROW
+#property indicator_color7  clrLime
+#property indicator_width7  2
 
-input group "=== 主图期货K线 ==="
-input bool   InpDrawFutCandles = true;      // 在主图叠加期货K线
-input color  InpFutBull        = C'32,120,140';
-input color  InpFutBear        = C'160,70,60';
-input int    InpCandleWidth    = 60;        // 实体宽度占周期比例%(30-90)
+input group "=== 品种 / 模型 ==="
+input string InpSpotSymbol  = "XAUUSD.s";  // 现货
+input string InpFutSymbol   = "GC";        // 期货
+input int    InpLookback    = 60;
+input double InpEntryZ      = 2.0;
+input double InpExitZ       = 0.40;
+input int    InpSpreadMode  = 0;           // 0=F-S
+input int    InpMinBars     = 120;
+input int    InpMaxDrawBars = 400;
+
+input group "=== 主图双色K线 ==="
+input bool   InpDrawTwinK   = true;
+input color  InpSpotBull    = C'210,160,50';
+input color  InpSpotBear    = C'140,90,40';
+input color  InpFutBull     = C'40,140,160';
+input color  InpFutBear     = C'50,80,140';
+input int    InpCandleWidth = 70;
 
 #define OBJ_PREFIX "GFXBC_"
 
-double BufBasis[];
-double BufMean[];
-double BufUpper[];
-double BufLower[];
-double BufArrowShort[];
-double BufArrowLong[];
-double BufZ[];
-double BufExitMark[];
+double BufHistUp[], BufHistDn[], BufMean[], BufUpper[], BufLower[];
+double BufArrowShort[], BufArrowLong[], BufZ[];
+string g_spot="", g_fut="";
+int g_lookback=60;
 
-string g_fut = "";
-int    g_lookback = 60;
-
-//------------------------------------------------------------------
 double RawSpread(const double fut, const double spot)
   {
-   if(spot <= 0.0) return 0.0;
-   if(InpSpreadMode == 1) return fut / spot - 1.0;
-   if(InpSpreadMode == 2) return MathLog(fut / spot);
-   return fut - spot;
+   if(spot<=0) return 0;
+   if(InpSpreadMode==1) return fut/spot-1.0;
+   if(InpSpreadMode==2) return MathLog(fut/spot);
+   return fut-spot;
   }
 
-void DeleteFutObjects(void)
+void DeleteObjs()
   {
-   const int total = ObjectsTotal(0, 0, -1);
-   for(int i = total - 1; i >= 0; --i)
+   int total=ObjectsTotal(0,0,-1);
+   for(int i=total-1;i>=0;--i)
      {
-      const string name = ObjectName(0, i, 0, -1);
-      if(StringFind(name, OBJ_PREFIX) == 0)
-         ObjectDelete(0, name);
+      string n=ObjectName(0,i,0,-1);
+      if(StringFind(n,OBJ_PREFIX)==0) ObjectDelete(0,n);
      }
   }
 
-void DrawFutCandle(const int idx, const datetime t, const double o, const double h,
-                   const double l, const double c, const int period_sec)
+void DrawHalf(const string tag,const int idx,const datetime t1,const datetime t2,
+              const double o,const double h,const double l,const double c,const color col)
   {
-   const string body = StringFormat("%sb%d", OBJ_PREFIX, idx);
-   const string wick = StringFormat("%sw%d", OBJ_PREFIX, idx);
-   const color col = (c >= o) ? InpFutBull : InpFutBear;
-   const int half = MathMax(1, (int)(period_sec * MathMax(30, MathMin(90, InpCandleWidth)) / 200.0));
-   const datetime t1 = t - half;
-   const datetime t2 = t + half;
-   double top = MathMax(o, c);
-   double bot = MathMin(o, c);
-   if(MathAbs(top - bot) < _Point) top = bot + _Point;
-
-   if(ObjectFind(0, body) < 0)
-      ObjectCreate(0, body, OBJ_RECTANGLE, 0, t1, top, t2, bot);
+   string body=StringFormat("%s%s_b%d",OBJ_PREFIX,tag,idx);
+   string wick=StringFormat("%s%s_w%d",OBJ_PREFIX,tag,idx);
+   double top=MathMax(o,c), bot=MathMin(o,c);
+   if(MathAbs(top-bot)<_Point) top=bot+_Point;
+   if(ObjectFind(0,body)<0) ObjectCreate(0,body,OBJ_RECTANGLE,0,t1,top,t2,bot);
    else
      {
-      ObjectSetInteger(0, body, OBJPROP_TIME, 0, t1);
-      ObjectSetDouble(0, body, OBJPROP_PRICE, 0, top);
-      ObjectSetInteger(0, body, OBJPROP_TIME, 1, t2);
-      ObjectSetDouble(0, body, OBJPROP_PRICE, 1, bot);
+      ObjectSetInteger(0,body,OBJPROP_TIME,0,t1);
+      ObjectSetDouble(0,body,OBJPROP_PRICE,0,top);
+      ObjectSetInteger(0,body,OBJPROP_TIME,1,t2);
+      ObjectSetDouble(0,body,OBJPROP_PRICE,1,bot);
      }
-   ObjectSetInteger(0, body, OBJPROP_COLOR, col);
-   ObjectSetInteger(0, body, OBJPROP_STYLE, STYLE_SOLID);
-   ObjectSetInteger(0, body, OBJPROP_WIDTH, 1);
-   ObjectSetInteger(0, body, OBJPROP_FILL, true);
-   ObjectSetInteger(0, body, OBJPROP_BACK, true);
-   ObjectSetInteger(0, body, OBJPROP_SELECTABLE, false);
-   ObjectSetInteger(0, body, OBJPROP_HIDDEN, true);
-
-   if(ObjectFind(0, wick) < 0)
-      ObjectCreate(0, wick, OBJ_TREND, 0, t, h, t, l);
+   ObjectSetInteger(0,body,OBJPROP_COLOR,col);
+   ObjectSetInteger(0,body,OBJPROP_FILL,true);
+   ObjectSetInteger(0,body,OBJPROP_BACK,true);
+   ObjectSetInteger(0,body,OBJPROP_SELECTABLE,false);
+   datetime tm=t1+(t2-t1)/2;
+   if(ObjectFind(0,wick)<0) ObjectCreate(0,wick,OBJ_TREND,0,tm,h,tm,l);
    else
      {
-      ObjectSetInteger(0, wick, OBJPROP_TIME, 0, t);
-      ObjectSetDouble(0, wick, OBJPROP_PRICE, 0, h);
-      ObjectSetInteger(0, wick, OBJPROP_TIME, 1, t);
-      ObjectSetDouble(0, wick, OBJPROP_PRICE, 1, l);
+      ObjectSetInteger(0,wick,OBJPROP_TIME,0,tm);
+      ObjectSetDouble(0,wick,OBJPROP_PRICE,0,h);
+      ObjectSetInteger(0,wick,OBJPROP_TIME,1,tm);
+      ObjectSetDouble(0,wick,OBJPROP_PRICE,1,l);
      }
-   ObjectSetInteger(0, wick, OBJPROP_COLOR, col);
-   ObjectSetInteger(0, wick, OBJPROP_STYLE, STYLE_SOLID);
-   ObjectSetInteger(0, wick, OBJPROP_WIDTH, 1);
-   ObjectSetInteger(0, wick, OBJPROP_RAY_RIGHT, false);
-   ObjectSetInteger(0, wick, OBJPROP_RAY_LEFT, false);
-   ObjectSetInteger(0, wick, OBJPROP_BACK, true);
-   ObjectSetInteger(0, wick, OBJPROP_SELECTABLE, false);
-   ObjectSetInteger(0, wick, OBJPROP_HIDDEN, true);
+   ObjectSetInteger(0,wick,OBJPROP_COLOR,col);
+   ObjectSetInteger(0,wick,OBJPROP_RAY_RIGHT,false);
+   ObjectSetInteger(0,wick,OBJPROP_BACK,true);
+   ObjectSetInteger(0,wick,OBJPROP_SELECTABLE,false);
   }
 
-void UpdatePanel(const double basis, const double mean, const double stdev,
-                 const double z, const double spot, const double fut)
+void DrawTwin(const int idx,const datetime t,const int period_sec,
+              const double so,const double sh,const double sl,const double sc,
+              const double fo,const double fh,const double fl,const double fc)
   {
-   const string n = OBJ_PREFIX "panel";
-   string txt = StringFormat("GoldFX 期现对比\n现货 %s %.2f\n期货 %s %.2f\n基差 %.4f  均值 %.4f  σ %.4f\nZ=%.2f  Entry±%.1f  Exit±%.1f",
-                             _Symbol, spot, g_fut, fut, basis, mean, stdev, z, InpEntryZ, InpExitZ);
-   if(ObjectFind(0, n) < 0)
-     {
-      ObjectCreate(0, n, OBJ_LABEL, 0, 0, 0);
-      ObjectSetInteger(0, n, OBJPROP_CORNER, CORNER_LEFT_UPPER);
-      ObjectSetInteger(0, n, OBJPROP_XDISTANCE, 8);
-      ObjectSetInteger(0, n, OBJPROP_YDISTANCE, 20);
-      ObjectSetString(0, n, OBJPROP_FONT, "Consolas");
-      ObjectSetInteger(0, n, OBJPROP_FONTSIZE, 9);
-      ObjectSetInteger(0, n, OBJPROP_COLOR, clrWhiteSmoke);
-      ObjectSetInteger(0, n, OBJPROP_SELECTABLE, false);
-     }
-   ObjectSetString(0, n, OBJPROP_TEXT, txt);
+   int half=period_sec*MathMax(40,MathMin(90,InpCandleWidth))/200;
+   if(half<2) half=2;
+   int gap=MathMax(1,half/8);
+   DrawHalf("S",idx,t-half,t-gap,so,sh,sl,sc,(sc>=so)?InpSpotBull:InpSpotBear);
+   DrawHalf("F",idx,t+gap,t+half,fo,fh,fl,fc,(fc>=fo)?InpFutBull:InpFutBear);
   }
 
-//------------------------------------------------------------------
+void UpdatePanel(const double basis,const double mean,const double stdev,
+                 const double z,const double spot,const double fut)
+  {
+   string n=OBJ_PREFIX"panel";
+   string txt=StringFormat("GoldFX 期现对比\n金=现货 %s  蓝绿=期货 %s\n现货 %.2f  期货 %.2f\n价差(柱) %.4f 均值 %.4f σ %.4f\nZ=%.2f ±Entry %.1f",
+                           g_spot,g_fut,spot,fut,basis,mean,stdev,z,InpEntryZ);
+   if(ObjectFind(0,n)<0)
+     {
+      ObjectCreate(0,n,OBJ_LABEL,0,0,0);
+      ObjectSetInteger(0,n,OBJPROP_CORNER,CORNER_LEFT_UPPER);
+      ObjectSetInteger(0,n,OBJPROP_XDISTANCE,8);
+      ObjectSetInteger(0,n,OBJPROP_YDISTANCE,18);
+      ObjectSetString(0,n,OBJPROP_FONT,"Consolas");
+      ObjectSetInteger(0,n,OBJPROP_FONTSIZE,9);
+      ObjectSetInteger(0,n,OBJPROP_COLOR,clrWhiteSmoke);
+     }
+   ObjectSetString(0,n,OBJPROP_TEXT,txt);
+  }
+
 int OnInit()
   {
-   g_fut = InpFutSymbol;
+   g_spot=InpSpotSymbol; g_fut=InpFutSymbol;
+   StringTrimLeft(g_spot); StringTrimRight(g_spot);
    StringTrimLeft(g_fut); StringTrimRight(g_fut);
-   if(StringLen(g_fut) == 0)
-     {
-      Print("GoldFX_BasisCompare: 请填写 InpFutSymbol");
-      return INIT_PARAMETERS_INCORRECT;
-     }
-   if(g_fut == _Symbol)
-     {
-      Print("GoldFX_BasisCompare: 期货与现货不能相同");
-      return INIT_PARAMETERS_INCORRECT;
-     }
-   if(!SymbolSelect(g_fut, true))
-     {
-      Print("GoldFX_BasisCompare: 无法选择期货 ", g_fut);
-      return INIT_FAILED;
-     }
+   if(StringLen(g_spot)==0) g_spot=_Symbol;
+   if(StringLen(g_fut)==0){ Print("请填写期货代码 GC"); return INIT_PARAMETERS_INCORRECT; }
+   if(g_spot==g_fut) return INIT_PARAMETERS_INCORRECT;
+   if(!SymbolSelect(g_spot,true)||!SymbolSelect(g_fut,true)) return INIT_FAILED;
+   g_lookback=MathMax(20,InpLookback);
 
-   g_lookback = MathMax(20, InpLookback);
-
-   SetIndexBuffer(0, BufBasis, INDICATOR_DATA);
-   SetIndexBuffer(1, BufMean, INDICATOR_DATA);
-   SetIndexBuffer(2, BufUpper, INDICATOR_DATA);
-   SetIndexBuffer(3, BufLower, INDICATOR_DATA);
-   SetIndexBuffer(4, BufArrowShort, INDICATOR_DATA);
-   SetIndexBuffer(5, BufArrowLong, INDICATOR_DATA);
-   SetIndexBuffer(6, BufZ, INDICATOR_DATA);
-   SetIndexBuffer(7, BufExitMark, INDICATOR_CALCULATIONS);
-
-   PlotIndexSetInteger(4, PLOT_ARROW, 234); // 向下箭头 — 空基差
-   PlotIndexSetInteger(5, PLOT_ARROW, 233); // 向上箭头 — 多基差
-   PlotIndexSetDouble(4, PLOT_EMPTY_VALUE, EMPTY_VALUE);
-   PlotIndexSetDouble(5, PLOT_EMPTY_VALUE, EMPTY_VALUE);
-
-   ArraySetAsSeries(BufBasis, true);
-   ArraySetAsSeries(BufMean, true);
-   ArraySetAsSeries(BufUpper, true);
-   ArraySetAsSeries(BufLower, true);
-   ArraySetAsSeries(BufArrowShort, true);
-   ArraySetAsSeries(BufArrowLong, true);
-   ArraySetAsSeries(BufZ, true);
-   ArraySetAsSeries(BufExitMark, true);
-
-   IndicatorSetString(INDICATOR_SHORTNAME,
-                      StringFormat("GoldFX Basis %s vs %s", _Symbol, g_fut));
-   IndicatorSetInteger(INDICATOR_DIGITS, 4);
+   SetIndexBuffer(0,BufHistUp,INDICATOR_DATA);
+   SetIndexBuffer(1,BufHistDn,INDICATOR_DATA);
+   SetIndexBuffer(2,BufMean,INDICATOR_DATA);
+   SetIndexBuffer(3,BufUpper,INDICATOR_DATA);
+   SetIndexBuffer(4,BufLower,INDICATOR_DATA);
+   SetIndexBuffer(5,BufArrowShort,INDICATOR_DATA);
+   SetIndexBuffer(6,BufArrowLong,INDICATOR_DATA);
+   SetIndexBuffer(7,BufZ,INDICATOR_DATA);
+   PlotIndexSetInteger(5,PLOT_ARROW,234);
+   PlotIndexSetInteger(6,PLOT_ARROW,233);
+   PlotIndexSetDouble(0,PLOT_EMPTY_VALUE,EMPTY_VALUE);
+   PlotIndexSetDouble(1,PLOT_EMPTY_VALUE,EMPTY_VALUE);
+   PlotIndexSetDouble(5,PLOT_EMPTY_VALUE,EMPTY_VALUE);
+   PlotIndexSetDouble(6,PLOT_EMPTY_VALUE,EMPTY_VALUE);
+   ArraySetAsSeries(BufHistUp,true); ArraySetAsSeries(BufHistDn,true);
+   ArraySetAsSeries(BufMean,true); ArraySetAsSeries(BufUpper,true); ArraySetAsSeries(BufLower,true);
+   ArraySetAsSeries(BufArrowShort,true); ArraySetAsSeries(BufArrowLong,true); ArraySetAsSeries(BufZ,true);
+   IndicatorSetString(INDICATOR_SHORTNAME,StringFormat("价差柱 %s-%s",g_fut,g_spot));
+   IndicatorSetInteger(INDICATOR_DIGITS,4);
+   ChartSetInteger(0,CHART_MODE,CHART_LINE);
+   ChartSetInteger(0,CHART_COLOR_CHART_LINE,C'60,60,60');
    return INIT_SUCCEEDED;
   }
 
-void OnDeinit(const int reason)
+void OnDeinit(const int reason){ DeleteObjs(); }
+
+int OnCalculate(const int rates_total,const int prev_calculated,
+                const datetime &time[],const double &open[],const double &high[],
+                const double &low[],const double &close[],
+                const long &tick_volume[],const long &volume[],const int &spread[])
   {
-   DeleteFutObjects();
-   ObjectDelete(0, OBJ_PREFIX "panel");
-  }
+   if(rates_total<InpMinBars||rates_total<g_lookback+5) return 0;
+   ArraySetAsSeries(time,true); ArraySetAsSeries(close,true);
+   int limit=MathMin(rates_total-g_lookback-1,InpMaxDrawBars);
+   int start=limit;
+   if(prev_calculated>g_lookback+2) start=MathMin(limit,3);
+   int period_sec=(int)PeriodSeconds(_Period);
 
-//------------------------------------------------------------------
-int OnCalculate(const int rates_total,
-                const int prev_calculated,
-                const datetime &time[],
-                const double &open[],
-                const double &high[],
-                const double &low[],
-                const double &close[],
-                const long &tick_volume[],
-                const long &volume[],
-                const int &spread[])
-  {
-   if(rates_total < InpMinBars || rates_total < g_lookback + 5)
-      return 0;
-
-   ArraySetAsSeries(time, true);
-   ArraySetAsSeries(open, true);
-   ArraySetAsSeries(high, true);
-   ArraySetAsSeries(low, true);
-   ArraySetAsSeries(close, true);
-
-   MqlRates fut_rates[];
-   ArraySetAsSeries(fut_rates, true);
-   const int need = MathMin(rates_total, InpMaxDrawBars + g_lookback + 10);
-   const int copied = CopyRates(g_fut, _Period, 0, need, fut_rates);
-   if(copied < g_lookback + 5)
-      return 0;
-
-   const int limit = MathMin(rates_total - g_lookback - 1, InpMaxDrawBars);
-   const int period_sec = PeriodSeconds(_Period);
-
-   // 从旧到新填缓冲；series 下标 0 = 最新
-   int start = limit;
-   if(prev_calculated > g_lookback + 2)
-      start = MathMin(limit, 3); // 增量：刷新最近几根
-
-   for(int i = start; i >= 0; --i)
+   for(int i=start;i>=0;--i)
      {
-      BufArrowShort[i] = EMPTY_VALUE;
-      BufArrowLong[i]  = EMPTY_VALUE;
-      BufExitMark[i]   = EMPTY_VALUE;
-
-      // 滚动窗口：用已收盘棒 i+1 .. i+lookback（对当前形成棒 i=0 用 1..lookback）
-      double sum = 0, sum2 = 0;
-      int    cnt = 0;
-      bool   ok  = true;
-      for(int k = 1; k <= g_lookback; ++k)
+      BufHistUp[i]=EMPTY_VALUE; BufHistDn[i]=EMPTY_VALUE;
+      BufArrowShort[i]=EMPTY_VALUE; BufArrowLong[i]=EMPTY_VALUE;
+      double sum=0,sum2=0; int cnt=0; bool ok=true;
+      for(int k=1;k<=g_lookback;++k)
         {
-         const int si = i + k;
-         if(si >= rates_total) { ok = false; break; }
-         const int fi = iBarShift(g_fut, _Period, time[si], false);
-         if(fi < 0 || fi >= copied) { ok = false; break; }
-         const double sp = RawSpread(fut_rates[fi].close, close[si]);
-         sum += sp;
-         sum2 += sp * sp;
-         cnt++;
+         int si=i+k; if(si>=rates_total){ok=false;break;}
+         int fs=iBarShift(g_spot,_Period,time[si],false);
+         int ff=iBarShift(g_fut,_Period,time[si],false);
+         if(fs<0||ff<0){ok=false;break;}
+         double sp=RawSpread(iClose(g_fut,_Period,ff),iClose(g_spot,_Period,fs));
+         sum+=sp; sum2+=sp*sp; cnt++;
         }
-      if(!ok || cnt < g_lookback)
+      if(!ok||cnt<g_lookback)
+        { BufMean[i]=EMPTY_VALUE; BufUpper[i]=EMPTY_VALUE; BufLower[i]=EMPTY_VALUE; BufZ[i]=EMPTY_VALUE; continue; }
+      double mean=sum/cnt, stdev=MathSqrt(MathMax(0.0,sum2/cnt-mean*mean));
+      int fs0=iBarShift(g_spot,_Period,time[i],false);
+      int ff0=iBarShift(g_fut,_Period,time[i],false);
+      if(fs0<0||ff0<0){ BufMean[i]=EMPTY_VALUE; continue; }
+      double so=iOpen(g_spot,_Period,fs0), sh=iHigh(g_spot,_Period,fs0), sl=iLow(g_spot,_Period,fs0), sc=iClose(g_spot,_Period,fs0);
+      double fo=iOpen(g_fut,_Period,ff0), fh=iHigh(g_fut,_Period,ff0), fl=iLow(g_fut,_Period,ff0), fc=iClose(g_fut,_Period,ff0);
+      if(i==0)
         {
-         BufBasis[i] = EMPTY_VALUE;
-         BufMean[i]  = EMPTY_VALUE;
-         BufUpper[i] = EMPTY_VALUE;
-         BufLower[i] = EMPTY_VALUE;
-         BufZ[i]     = EMPTY_VALUE;
-         continue;
+         MqlTick ts,tf;
+         if(SymbolInfoTick(g_spot,ts)){ sc=0.5*(ts.bid+ts.ask); if(sc>sh)sh=sc; if(sc<sl)sl=sc; }
+         if(SymbolInfoTick(g_fut,tf)){ fc=0.5*(tf.bid+tf.ask); if(fc>fh)fh=fc; if(fc<fl)fl=fc; }
         }
-
-      const double mean = sum / cnt;
-      const double var  = MathMax(0.0, sum2 / cnt - mean * mean);
-      const double stdev = MathSqrt(var);
-
-      int fi_now = iBarShift(g_fut, _Period, time[i], false);
-      if(fi_now < 0 || fi_now >= copied)
+      double basis=RawSpread(fc,sc);
+      double z=(stdev>1e-12)?(basis-mean)/stdev:0;
+      BufMean[i]=mean; BufUpper[i]=mean+InpEntryZ*stdev; BufLower[i]=mean-InpEntryZ*stdev; BufZ[i]=z;
+      if(basis>=mean) BufHistUp[i]=basis; else BufHistDn[i]=basis;
+      if(i+1<rates_total && BufZ[i+1]!=EMPTY_VALUE)
         {
-         BufBasis[i] = EMPTY_VALUE;
-         continue;
+         double zp=BufZ[i+1];
+         if(z>=InpEntryZ && zp<InpEntryZ) BufArrowShort[i]=basis;
+         if(z<=-InpEntryZ && zp>-InpEntryZ) BufArrowLong[i]=basis;
         }
-
-      double fut_c = fut_rates[fi_now].close;
-      double spot_c = close[i];
-      // 当前形成棒：用最新 mid 刷新
-      if(i == 0)
-        {
-         MqlTick ts, tf;
-         if(SymbolInfoTick(_Symbol, ts) && SymbolInfoTick(g_fut, tf))
-           {
-            spot_c = 0.5 * (ts.bid + ts.ask);
-            fut_c  = 0.5 * (tf.bid + tf.ask);
-           }
-        }
-
-      const double basis = RawSpread(fut_c, spot_c);
-      const double z = (stdev > 1e-12) ? (basis - mean) / stdev : 0.0;
-
-      BufBasis[i] = basis;
-      BufMean[i]  = mean;
-      BufUpper[i] = mean + InpEntryZ * stdev;
-      BufLower[i] = mean - InpEntryZ * stdev;
-      BufZ[i]     = z;
-
-      // 信号：相对前一根 Z 穿越入场带
-      if(i + 1 < rates_total && BufZ[i + 1] != EMPTY_VALUE)
-        {
-         const double zprev = BufZ[i + 1];
-         if(z >= InpEntryZ && zprev < InpEntryZ)
-            BufArrowShort[i] = basis;
-         if(z <= -InpEntryZ && zprev > -InpEntryZ)
-            BufArrowLong[i] = basis;
-         if(MathAbs(z) <= InpExitZ && MathAbs(zprev) > InpExitZ)
-            BufExitMark[i] = basis;
-        }
-
-      if(InpDrawFutCandles && fi_now >= 0 && fi_now < copied)
-        {
-         const MqlRates fr = fut_rates[fi_now];
-         double fo = fr.open, fh = fr.high, fl = fr.low, fc = fr.close;
-         if(i == 0)
-           {
-            MqlTick tf;
-            if(SymbolInfoTick(g_fut, tf))
-              {
-               fc = 0.5 * (tf.bid + tf.ask);
-               if(fc > fh) fh = fc;
-               if(fc < fl) fl = fc;
-              }
-           }
-         DrawFutCandle(i, time[i], fo, fh, fl, fc, period_sec);
-        }
+      if(InpDrawTwinK) DrawTwin(i,time[i],period_sec,so,sh,sl,sc,fo,fh,fl,fc);
      }
-
-   // 实时面板
-   if(BufZ[0] != EMPTY_VALUE)
+   if(BufZ[0]!=EMPTY_VALUE)
      {
-      double spot_mid = close[0], fut_mid = 0;
-      MqlTick ts, tf;
-      if(SymbolInfoTick(_Symbol, ts)) spot_mid = 0.5 * (ts.bid + ts.ask);
-      if(SymbolInfoTick(g_fut, tf))   fut_mid  = 0.5 * (tf.bid + tf.ask);
-      else
-        {
-         const int fi0 = iBarShift(g_fut, _Period, time[0], false);
-         if(fi0 >= 0 && fi0 < copied) fut_mid = fut_rates[fi0].close;
-        }
-      UpdatePanel(BufBasis[0], BufMean[0],
-                  (InpEntryZ > 0 ? (BufUpper[0] - BufMean[0]) / InpEntryZ : 0),
-                  BufZ[0], spot_mid, fut_mid);
+      MqlTick ts,tf; double sm=0,fm=0;
+      if(SymbolInfoTick(g_spot,ts)) sm=0.5*(ts.bid+ts.ask);
+      if(SymbolInfoTick(g_fut,tf)) fm=0.5*(tf.bid+tf.ask);
+      double stdev0=(InpEntryZ>0)?(BufUpper[0]-BufMean[0])/InpEntryZ:0;
+      double basis0=(BufHistUp[0]!=EMPTY_VALUE)?BufHistUp[0]:BufHistDn[0];
+      UpdatePanel(basis0,BufMean[0],stdev0,BufZ[0],sm,fm);
      }
-
    return rates_total;
   }
 //+------------------------------------------------------------------+

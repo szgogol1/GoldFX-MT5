@@ -5,7 +5,7 @@
 //+------------------------------------------------------------------+
 #property copyright "GoldFX Intraday Framework"
 #property link      "https://github.com/szgogol1/GoldFX-MT5"
-#property version   "1.10"
+#property version   "1.20"
 #property strict
 #property description "黄金现货-期货基差Z分：双K对比配合，价差大开仓/收敛盈利平仓提醒"
 
@@ -13,8 +13,8 @@
 #include <GoldFX/TelegramBridge.mqh>
 
 //=== 品种 ===
-input string InpSpotSymbol      = "XAUUSD";   // 现货
-input string InpFutSymbol       = "";         // 期货/远期（必填）
+input string InpSpotSymbol      = "XAUUSD.s"; // 现货
+input string InpFutSymbol       = "GC";       // 期货
 input int    InpTF              = PERIOD_M15; // 统计周期
 
 //=== 基差模型 ===
@@ -36,7 +36,7 @@ input double InpMaxDailyLossPct = 2.0;
 input double InpMaxSpreadSpot   = 0.60;
 input double InpMaxSpreadFut    = 0.80;
 input bool   InpAllowTrade      = true;
-input bool   InpSignalOnly      = true;       // true=仅提醒（推荐先开）
+input bool   InpStartManual     = true;       // 启动为手动（只提醒，推荐）
 input int    InpMagic           = 20260827;
 input int    InpSlippage        = 40;
 
@@ -56,6 +56,7 @@ input bool   InpFridayCut       = true;
 input int    InpFridayHour      = 18;
 
 #define PANEL_PREFIX "GFXBA4_"
+#define BTN_MODE     "GFXBA4_btnMode"
 
 CBasisArbitrage g_engine;
 CTelegramBridge g_tg;
@@ -65,8 +66,62 @@ double          g_day_start_eq = 0;
 bool            g_paused = false;
 int             g_last_alert_act = -1;
 datetime        g_last_alert_bar = 0;
+bool            g_manual = true;   // true=手动观察(仅提醒)  false=自动交易
+
+void NotifySignal(const int act, const string msg);
+void RenderPanel();
 
 //------------------------------------------------------------------
+bool IsManualMode()
+  {
+   return g_manual;
+  }
+
+void UpdateModeButton()
+  {
+   if(ObjectFind(BTN_MODE)<0)
+     {
+      ObjectCreate(BTN_MODE, OBJ_BUTTON, 0, 0, 0);
+      ObjectSet(BTN_MODE, OBJPROP_CORNER, CORNER_RIGHT_UPPER);
+      ObjectSet(BTN_MODE, OBJPROP_XDISTANCE, 160);
+      ObjectSet(BTN_MODE, OBJPROP_YDISTANCE, 20);
+      ObjectSet(BTN_MODE, OBJPROP_XSIZE, 150);
+      ObjectSet(BTN_MODE, OBJPROP_YSIZE, 28);
+      ObjectSet(BTN_MODE, OBJPROP_SELECTABLE, true);
+     }
+   if(g_manual)
+     {
+      ObjectSetText(BTN_MODE, "模式: 手动观察", 10, "Arial", White);
+      ObjectSet(BTN_MODE, OBJPROP_BGCOLOR, C'40,90,140');
+      ObjectSet(BTN_MODE, OBJPROP_COLOR, White);
+     }
+   else
+     {
+      ObjectSetText(BTN_MODE, "模式: 自动交易", 10, "Arial", White);
+      ObjectSet(BTN_MODE, OBJPROP_BGCOLOR, C'160,70,40');
+      ObjectSet(BTN_MODE, OBJPROP_COLOR, White);
+     }
+   ObjectSetInteger(0, BTN_MODE, OBJPROP_STATE, false);
+   ChartRedraw();
+  }
+
+void ToggleManualAuto()
+  {
+   g_manual = !g_manual;
+   if(g_manual)
+     {
+      g_status = "已切换【手动观察】— 只提醒不开仓";
+      NotifySignal(99, "GoldFX: 切换为手动观察（仅提醒）");
+     }
+   else
+     {
+      g_status = "已切换【自动交易】— 将按信号双边下单";
+      NotifySignal(98, "GoldFX: 切换为自动交易（实盘对冲）");
+     }
+   UpdateModeButton();
+   RenderPanel();
+  }
+
 bool InSession()
   {
    const int dow = TimeDayOfWeek(TimeCurrent());
@@ -182,7 +237,7 @@ bool OpenOrder(const string sym, const int cmd, const double lots, const string 
 
 bool OpenSpread(const ENUM_BASIS_SIDE side, const string why)
   {
-   if(InpSignalOnly)
+   if(IsManualMode())
      {
       g_status = "信号:"+why;
       g_engine.SetOpenSide(side);
@@ -243,7 +298,7 @@ bool OpenSpread(const ENUM_BASIS_SIDE side, const string why)
 
 void SyncOpenSideFromOrders()
   {
-   if(InpSignalOnly && CountMagicOrders("")==0)
+   if(IsManualMode() && CountMagicOrders("")==0)
       return;
 
    const string spot = g_engine.SpotSymbol();
@@ -299,19 +354,20 @@ void RenderPanel()
    if(g_engine.OpenSide()==BASIS_SHORT_SPREAD) side="空基差(空期+多现)";
    else if(g_engine.OpenSide()==BASIS_LONG_SPREAD) side="多基差(多期+空现)";
    const double pnl = FloatingProfitMagic();
-   const string mode = InpSignalOnly ? "仅提醒" : "实盘对冲";
+   const string mode = IsManualMode() ? "手动观察" : "自动交易";
 
    Comment("");
    if(!InpShowPanel)
      {
       Comment(
-         "GoldFX MT4 基差套利 v1.1 [", mode, "]\n",
+         "GoldFX MT4 基差套利 v1.2 [", mode, "]\n",
          "现货 ", g_engine.SpotSymbol(), " = ", DoubleToStr(s.spot_mid, 2),
          " | 期货 ", g_engine.FutSymbol(), " = ", DoubleToStr(s.fut_mid, 2), "\n",
          "基差 ", DoubleToStr(s.spread, 4),
          " Z=", DoubleToStr(s.zscore, 2),
          " Corr=", DoubleToStr(s.corr, 2), "\n",
          "持仓: ", side, " 浮盈=", DoubleToStr(pnl, 2), "\n",
+         "右上角按钮切换 手动/自动\n",
          g_status
       );
       return;
@@ -322,7 +378,7 @@ void RenderPanel()
    else if(s.zscore<=-InpEntryZ) zcol = Lime;
    else if(MathAbs(s.zscore)<=InpExitZ) zcol = Gold;
 
-   PanelSet("t0", 18, "GoldFX MT4 基差套利 v1.1  ["+mode+"]", Aqua);
+   PanelSet("t0", 18, "GoldFX MT4 基差 v1.2  ["+mode+"]", Aqua);
    PanelSet("t1", 34, StringFormat("现货 %s = %.2f   期货 %s = %.2f",
             g_engine.SpotSymbol(), s.spot_mid, g_engine.FutSymbol(), s.fut_mid), White);
    PanelSet("t2", 50, StringFormat("基差 %.4f  均值 %.4f  σ %.4f",
@@ -369,7 +425,7 @@ int OnInit()
    p.auto_hedge = InpAutoHedge;
    p.max_spread_spot = InpMaxSpreadSpot;
    p.max_spread_fut = InpMaxSpreadFut;
-   p.trade_both_legs = !InpSignalOnly;
+   p.trade_both_legs = !IsManualMode();
    p.magic = InpMagic;
    p.slippage = InpSlippage;
    p.cooldown_bars = InpCooldownBars;
@@ -378,14 +434,17 @@ int OnInit()
    if(!g_engine.Init(p))
       return INIT_FAILED;
 
+   g_manual = InpStartManual;
    g_tg.ConfigureDirect(InpTelegramEnable, InpTelegramToken, InpTelegramChatId);
    RefreshDay();
    SyncOpenSideFromOrders();
-   g_status = "基差引擎就绪 — 等待Z分触发";
+   g_status = g_manual ? "手动观察就绪 — 只提醒，确认后点右上角切自动"
+                       : "自动交易就绪 — 等待Z分开仓";
    g_last_alert_act = -1;
    g_last_alert_bar = 0;
-   PrintFormat("BasisArb MT4 spot=%s fut=%s TF=%d entryZ=%.1f signalOnly=%d",
-               spot, fut, InpTF, InpEntryZ, (int)InpSignalOnly);
+   UpdateModeButton();
+   PrintFormat("BasisArb MT4 spot=%s fut=%s TF=%d entryZ=%.1f manual=%d",
+               spot, fut, InpTF, InpEntryZ, (int)g_manual);
    return INIT_SUCCEEDED;
   }
 
@@ -393,6 +452,13 @@ void OnDeinit(const int reason)
   {
    Comment("");
    DestroyPanel();
+   ObjectDelete(BTN_MODE);
+  }
+
+void OnChartEvent(const int id, const long &lparam, const double &dparam, const string &sparam)
+  {
+   if(id==CHARTEVENT_OBJECT_CLICK && sparam==BTN_MODE)
+      ToggleManualAuto();
   }
 
 void OnTick()
@@ -403,7 +469,7 @@ void OnTick()
 
    const double pnl_real = FloatingProfitMagic();
    double pnl = pnl_real;
-   if(InpSignalOnly && CountMagicOrders("")==0 && g_engine.OpenSide()!=BASIS_FLAT)
+   if(IsManualMode() && CountMagicOrders("")==0 && g_engine.OpenSide()!=BASIS_FLAT)
       pnl = MathMax(pnl_real, InpMinProfitMoney);
 
    if(!InpAllowTrade || g_paused)
@@ -418,7 +484,7 @@ void OnTick()
 
    if(act==3 || act==4)
      {
-      if(InpSignalOnly)
+      if(IsManualMode())
         {
          g_status = why;
          const string tag = (act==4) ? "【止损/超时提醒】" : "【平仓提醒】";
@@ -452,7 +518,7 @@ void OnTick()
    else
       g_status = why;
 
-   if(InpSignalOnly && newbar && g_engine.OpenSide()!=BASIS_FLAT &&
+   if(IsManualMode() && newbar && g_engine.OpenSide()!=BASIS_FLAT &&
       StringFind(why, "回归待利")==0)
       NotifySignal(10, "【待平仓】"+why);
 

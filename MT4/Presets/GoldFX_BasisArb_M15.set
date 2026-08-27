@@ -1,6 +1,6 @@
-; GoldFX MT4 基差套利 / 期现提醒 — M15（请改 InpFutSymbol）
-InpSpotSymbol=XAUUSD
-InpFutSymbol=XAUUSD.f
+; GoldFX MT4 — XAUUSD.s vs GC，默认手动观察
+InpSpotSymbol=XAUUSD.s
+InpFutSymbol=GC
 InpTF=15
 InpSpreadMode=0
 InpLookback=60
@@ -18,7 +18,7 @@ InpMaxDailyLossPct=2.0
 InpMaxSpreadSpot=0.60
 InpMaxSpreadFut=0.80
 InpAllowTrade=true
-InpSignalOnly=true
+InpStartManual=true
 InpMagic=20260827
 InpSlippage=40
 InpUseAlert=true

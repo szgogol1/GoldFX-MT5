@@ -9,8 +9,8 @@
 2. MetaEditor（F4）**F7** 编译：
    - `Experts\GoldFX_BasisArb.mq4`
    - `Indicators\GoldFX_BasisCompare.mq4`
-3. 现货图（如 XAUUSD M15）加载指标 + EA，填写 `InpFutSymbol`
-4. 默认 `InpSignalOnly=true` 仅提醒；确认后再改为实盘双边对冲
+3. 打开 **XAUUSD.s** 图，加载指标 + EA（默认期货 `GC`）
+4. 默认 **手动观察**；右上角按钮切换 **自动交易**
 5. 详见 [MT4/README.md](MT4/README.md)
 
 ### MetaTrader 5
@@ -62,19 +62,20 @@ Z_t = \frac{B_t - \mu_B}{\sigma_B}
 
 ### 双 K 对比指标（`GoldFX_BasisCompare`）
 
-1. 挂在**现货**图表（如 XAUUSD M15）
-2. 设置 `InpFutSymbol` 为你的期货代码
-3. **主图**：叠加期货 K 线（颜色区分涨跌）+ 左上角实时面板（双价 / 基差 / Z）
-4. **副图**：基差曲线、滚动均值、`mean±EntryZ·σ` 上下带；穿越入场带时画箭头
+1. 挂在**现货**图表（推荐 `XAUUSD.s` M15）
+2. 默认期货 `GC`（可改）
+3. **主图**：现货/期货 **并排双色 K 线**（金=现货，蓝绿=期货）
+4. **副图**：**价差柱状图**（高于均值绿、低于红）+ 均值/入场带 + 箭头
+5. EA 右上角 **手/自动** 按钮：先手动观察，确认后切自动交易
 
 ### EA 提醒与交易
 
 1. 确认账户为**对冲模式**，且同时有现货 + 期货类黄金品种  
 2. 编译 `Experts/GoldFX_BasisArb/GoldFX_BasisArb.mq5` 与 `Indicators/GoldFX/GoldFX_BasisCompare.mq5`  
-3. 设置 `InpFutSymbol`；推荐先 `InpSignalOnly=true` 只收提醒  
+3. 默认 `XAUUSD.s` + `GC`，启动为**手动观察**  
 4. 提醒通道：`Alert` / MT5 推送 / 可选 Telegram  
 5. 加载 `GoldFX_BasisCompare_M15.set` 或 `GoldFX_BasisArb_M15.set`  
-6. 观察稳定后再将 `InpSignalOnly=false` 启用双边自动对冲  
+6. 观察无误后，点图上按钮切换 **自动交易** 
 
 > MT5 策略测试器对**双品种对冲**支持有限；基差策略请以**模拟盘实盘环境**验证为主。
 

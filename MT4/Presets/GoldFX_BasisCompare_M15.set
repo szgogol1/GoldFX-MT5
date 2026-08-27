@@ -1,9 +1,10 @@
-; GoldFX MT4 期现对比指标预设
-InpFutSymbol=XAUUSD.f
+; GoldFX MT4 期现对比指标 — XAUUSD.s vs GC
+InpSpotSymbol=XAUUSD.s
+InpFutSymbol=GC
 InpLookback=60
 InpEntryZ=2.0
 InpExitZ=0.40
 InpSpreadMode=0
 InpMinBars=120
 InpMaxDrawBars=400
-InpDrawFutCandles=true
+InpDrawTwinK=true

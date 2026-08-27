@@ -5,7 +5,7 @@
 //| 要求：经纪商同时提供现货与期货/远期类黄金品种；对冲账户推荐            |
 //+------------------------------------------------------------------+
 #property copyright "GoldFX Intraday Framework"
-#property version   "1.10"
+#property version   "1.20"
 #property description "黄金现货-期货基差Z分均值回归套利（双边对冲+价差提醒）"
 
 #include <Trade\Trade.mqh>
@@ -14,8 +14,8 @@
 #include <GoldFX/TelegramBridge.mqh>
 
 input group "=== 品种 ==="
-input string InpSpotSymbol     = "XAUUSD";     // 现货（或挂图品种）
-input string InpFutSymbol      = "";           // 期货/远期，必填（如 XAUz, GOLD#, XAUUSD.f）
+input string InpSpotSymbol     = "XAUUSD.s";   // 现货
+input string InpFutSymbol      = "GC";         // 期货（如 GC）
 input ENUM_TIMEFRAMES InpTF    = PERIOD_M15;   // 统计周期
 
 input group "=== 基差模型 ==="
@@ -37,7 +37,7 @@ input double InpMaxDailyLossPct= 2.0;
 input double InpMaxSpreadSpot  = 0.60;         // 现货最大点差（价格）
 input double InpMaxSpreadFut   = 0.80;
 input bool   InpAllowTrade     = true;
-input bool   InpSignalOnly     = true;         // true=仅提醒不开仓（推荐先观察）
+input bool   InpStartManual    = true;         // 启动为手动观察（推荐）
 input int    InpMagic          = 20260827;
 input int    InpSlippage       = 40;
 
@@ -57,6 +57,7 @@ input bool   InpFridayCut      = true;
 input int    InpFridayHour     = 18;
 
 #define PANEL_PREFIX "GFXBA_"
+#define BTN_MODE     "GFXBA_btnMode"
 
 //---
 CBasisArbitrage g_engine;
@@ -69,6 +70,49 @@ double          g_day_start_eq = 0;
 bool            g_paused = false;
 int             g_last_alert_act = -1;
 datetime        g_last_alert_bar = 0;
+bool            g_manual = true;
+
+void NotifySignal(const int act, const string msg);
+void RenderPanel(void);
+void UpdateModeButton(void);
+
+bool IsManualMode(void) { return g_manual; }
+
+void UpdateModeButton(void)
+  {
+   if(ObjectFind(0, BTN_MODE) < 0)
+     {
+      ObjectCreate(0, BTN_MODE, OBJ_BUTTON, 0, 0, 0);
+      ObjectSetInteger(0, BTN_MODE, OBJPROP_CORNER, CORNER_RIGHT_UPPER);
+      ObjectSetInteger(0, BTN_MODE, OBJPROP_XDISTANCE, 160);
+      ObjectSetInteger(0, BTN_MODE, OBJPROP_YDISTANCE, 20);
+      ObjectSetInteger(0, BTN_MODE, OBJPROP_XSIZE, 150);
+      ObjectSetInteger(0, BTN_MODE, OBJPROP_YSIZE, 28);
+     }
+   if(g_manual)
+     {
+      ObjectSetString(0, BTN_MODE, OBJPROP_TEXT, "模式: 手动观察");
+      ObjectSetInteger(0, BTN_MODE, OBJPROP_BGCOLOR, C'40,90,140');
+     }
+   else
+     {
+      ObjectSetString(0, BTN_MODE, OBJPROP_TEXT, "模式: 自动交易");
+      ObjectSetInteger(0, BTN_MODE, OBJPROP_BGCOLOR, C'160,70,40');
+     }
+   ObjectSetInteger(0, BTN_MODE, OBJPROP_COLOR, clrWhite);
+   ObjectSetInteger(0, BTN_MODE, OBJPROP_STATE, false);
+   ChartRedraw(0);
+  }
+
+void ToggleManualAuto(void)
+  {
+   g_manual = !g_manual;
+   g_status = g_manual ? "已切换【手动观察】— 只提醒不开仓"
+                       : "已切换【自动交易】— 将按信号双边下单";
+   NotifySignal(g_manual ? 99 : 98, g_status);
+   UpdateModeButton();
+   RenderPanel();
+  }
 
 //------------------------------------------------------------------
 bool InSession(void)
@@ -179,7 +223,7 @@ void NotifySignal(const int act, const string msg)
 
 bool OpenSpread(const ENUM_BASIS_SIDE side, const string why)
   {
-   if(InpSignalOnly)
+   if(IsManualMode())
      {
       g_status = "信号:"+why;
       g_engine.SetOpenSide(side); // 虚拟持仓，便于后续平仓/待利提醒
@@ -253,7 +297,7 @@ bool OpenSpread(const ENUM_BASIS_SIDE side, const string why)
 void SyncOpenSideFromPositions(void)
   {
    // 仅提醒模式用引擎内虚拟持仓，不被空仓覆盖
-   if(InpSignalOnly && CountMagicPositions("")==0)
+   if(IsManualMode() && CountMagicPositions("")==0)
       return;
 
    const string spot = g_engine.SpotSymbol();
@@ -314,7 +358,7 @@ void RenderPanel(void)
    if(g_engine.OpenSide()==BASIS_SHORT_SPREAD) side="空基差(空期+多现)";
    else if(g_engine.OpenSide()==BASIS_LONG_SPREAD) side="多基差(多期+空现)";
    const double pnl = FloatingProfitMagic();
-   const string mode = InpSignalOnly ? "仅提醒" : "实盘对冲";
+   const string mode = IsManualMode() ? "手动观察" : "自动交易";
 
    Comment(""); // 改用面板，清空旧 Comment
 
@@ -390,7 +434,7 @@ int OnInit()
    p.auto_hedge = InpAutoHedge;
    p.max_spread_spot = InpMaxSpreadSpot;
    p.max_spread_fut = InpMaxSpreadFut;
-   p.trade_both_legs = !InpSignalOnly;
+   p.trade_both_legs = true;
    p.magic = InpMagic;
    p.slippage = InpSlippage;
    p.cooldown_bars = InpCooldownBars;
@@ -403,13 +447,16 @@ int OnInit()
 
    g_trade.SetExpertMagicNumber(InpMagic);
    g_trade.SetDeviationInPoints(InpSlippage);
+   g_manual = InpStartManual;
    RefreshDay();
    SyncOpenSideFromPositions();
-   g_status = "基差引擎就绪 — 等待Z分触发";
+   g_status = g_manual ? "手动观察就绪 — 只提醒，确认后点右上角切自动"
+                       : "自动交易就绪 — 等待Z分开仓";
    g_last_alert_act = -1;
    g_last_alert_bar = 0;
-   PrintFormat("BasisArb spot=%s fut=%s TF=%d entryZ=%.1f exitZ=%.1f minProfit=%.2f signalOnly=%d",
-               spot, fut, (int)InpTF, InpEntryZ, InpExitZ, InpMinProfitMoney, (int)InpSignalOnly);
+   UpdateModeButton();
+   PrintFormat("BasisArb spot=%s fut=%s TF=%d entryZ=%.1f manual=%d",
+               spot, fut, (int)InpTF, InpEntryZ, (int)g_manual);
    return INIT_SUCCEEDED;
   }
 
@@ -417,6 +464,13 @@ void OnDeinit(const int reason)
   {
    Comment("");
    DestroyPanel();
+   ObjectDelete(0, BTN_MODE);
+  }
+
+void OnChartEvent(const int id, const long &lparam, const double &dparam, const string &sparam)
+  {
+   if(id==CHARTEVENT_OBJECT_CLICK && sparam==BTN_MODE)
+      ToggleManualAuto();
   }
 
 void OnTick()
@@ -428,7 +482,7 @@ void OnTick()
    const double pnl_real = FloatingProfitMagic();
    double pnl = pnl_real;
    // 仅提醒且无实仓：Z 回归即视为满足最小盈利门槛（无真实浮盈可计）
-   if(InpSignalOnly && CountMagicPositions("")==0 && g_engine.OpenSide()!=BASIS_FLAT)
+   if(IsManualMode() && CountMagicPositions("")==0 && g_engine.OpenSide()!=BASIS_FLAT)
       pnl = MathMax(pnl_real, InpMinProfitMoney);
 
    if(!InpAllowTrade || g_paused)
@@ -449,7 +503,7 @@ void OnTick()
    // 平仓不受时段限制
    if(act==3 || act==4)
      {
-      if(InpSignalOnly)
+      if(IsManualMode())
         {
          g_status = why;
          const string tag = (act==4) ? "【止损/超时提醒】" : "【平仓提醒】";
@@ -482,7 +536,7 @@ void OnTick()
       g_status = why;
 
    // 信号模式：持仓回归待利时也可在新棒提醒一次「待利」
-   if(InpSignalOnly && newbar && g_engine.OpenSide()!=BASIS_FLAT &&
+   if(IsManualMode() && newbar && g_engine.OpenSide()!=BASIS_FLAT &&
       StringFind(why, "回归待利") == 0)
       NotifySignal(10, "【待平仓】" + why);
 
