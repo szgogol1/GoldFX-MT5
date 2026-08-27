@@ -2,6 +2,19 @@
 
 ## Windows 安装
 
+### MetaTrader 4（期现双K + 价差提醒）
+
+1. 双击 `install_to_MT4.bat`（或 `install_to_MT4.ps1`），粘贴 MT4 的 **MQL4** 路径  
+   （MT4：文件 → 打开数据文件夹 → 进入 `MQL4`）
+2. MetaEditor（F4）**F7** 编译：
+   - `Experts\GoldFX_BasisArb.mq4`
+   - `Indicators\GoldFX_BasisCompare.mq4`
+3. 现货图（如 XAUUSD M15）加载指标 + EA，填写 `InpFutSymbol`
+4. 默认 `InpSignalOnly=true` 仅提醒；确认后再改为实盘双边对冲
+5. 详见 [MT4/README.md](MT4/README.md)
+
+### MetaTrader 5
+
 1. 克隆或解压仓库到本机，例如 `D:\GoldFX-MT5\`
 2. 双击 `install_to_MT5.bat`（或 `install_to_MT5.ps1`），粘贴 MT5 的 `MQL5` 路径
 3. MetaEditor 打开 `Experts\GoldFX_Intraday\GoldFX_Intraday.mq5`，按 **F7** 编译
@@ -15,7 +28,7 @@ GitHub：https://github.com/szgogol1/GoldFX-MT5
 参考 **SafeScalperPro / Prime** 的工程能力，在自有框架上实现：
 
 - **七条件缺一不可**入场（EMA 趋势/强度/价格位置/突破/RSI/动量/H1 确认）
-- **黄金现货–期货基差均值回归套利**（Z 分双边对冲 + 双K对比图 + 价差提醒）
+- **黄金现货–期货基差均值回归套利**（Z 分双边对冲 + 双K对比图 + 价差提醒；**MT4/MT5**）
 - **无网格 · 无马丁 · 一次一笔/每品种一笔**
 - **自适应风险引擎**（回撤降仓、ATR 反比、滚动胜率调整）
 - **单图多品种**（最多 8，CSV 配置）+ **相关性保护**
@@ -88,9 +101,13 @@ Z_t = \frac{B_t - \mu_B}{\sigma_B}
 ## 目录
 
 ```
-Experts/GoldFX_Intraday/GoldFX_Intraday.mq5   # 日内七条件
-Experts/GoldFX_BasisArb/GoldFX_BasisArb.mq5   # 现货-期货基差套利 + 提醒
-Indicators/GoldFX/GoldFX_BasisCompare.mq5     # 期现双K对比 + 基差副图
+MT4/                                           # MetaTrader 4 一键包
+  Experts/GoldFX_BasisArb.mq4
+  Indicators/GoldFX_BasisCompare.mq4
+  Include/GoldFX/*.mqh
+Experts/GoldFX_Intraday/GoldFX_Intraday.mq5   # 日内七条件（MT5）
+Experts/GoldFX_BasisArb/GoldFX_BasisArb.mq5   # 现货-期货基差套利 + 提醒（MT5）
+Indicators/GoldFX/GoldFX_BasisCompare.mq5     # 期现双K对比 + 基差副图（MT5）
 Include/GoldFX/
   SevenConditionStrategy.mqh
   BasisArbitrage.mqh           # 基差 Z 分引擎（含最小盈利出场）
@@ -104,6 +121,12 @@ Presets/
 ```
 
 ## 安装
+
+### MT4
+
+运行 `install_to_MT4.bat` → 编译 `GoldFX_BasisArb.mq4` 与 `GoldFX_BasisCompare.mq4` → 现货图加载。
+
+### MT5
 
 1. 复制到 MT5 `MQL5/Experts`、`MQL5/Indicators/GoldFX`、`MQL5/Include/GoldFX`、`MQL5/Presets`（或运行 `install_to_MT5.bat`）  
 2. MetaEditor **F7** 编译两个 EA + `GoldFX_BasisCompare` 指标  
