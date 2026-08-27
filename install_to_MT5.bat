@@ -1,9 +1,6 @@
 @echo off
 setlocal EnableExtensions
 
-rem GoldFX -> MT5 installer (ASCII only, Windows CMD safe)
-rem Run from folder that contains Experts\GoldFX_Intraday or 00xauusd\Experts\...
-
 set "SRC=%~dp0"
 if "%SRC:~-1%"=="\" set "SRC=%SRC:~0,-1%"
 
@@ -13,24 +10,13 @@ if exist "%SRC%\00xauusd\Experts\GoldFX_Intraday\GoldFX_Intraday.mq5" (
 
 if not exist "%SRC%\Experts\GoldFX_Intraday\GoldFX_Intraday.mq5" (
   echo [ERROR] Cannot find Experts\GoldFX_Intraday\GoldFX_Intraday.mq5
-  echo Source folder tried: %SRC%
-  echo.
-  echo Put this bat file inside the project folder, for example:
-  echo   D:\GoldFX-MT5\00xauusd\install_to_MT5.bat
-  echo.
+  echo Tried: %SRC%
   pause
   exit /b 1
 )
 
-echo ========================================
-echo  GoldFX MT5 Installer
-echo ========================================
-echo.
+echo GoldFX MT5 Installer
 echo Source: %SRC%
-echo.
-echo In MT5: File - Open Data Folder - open the MQL5 folder
-echo Paste the full MQL5 path below (must end with MQL5)
-echo Example: C:\Users\You\AppData\Roaming\MetaQuotes\Terminal\XXXXXXXX\MQL5
 echo.
 set /p "MQL5=MQL5 path: "
 
@@ -48,9 +34,6 @@ if not exist "%MQL5%" (
   exit /b 1
 )
 
-echo.
-echo Copying files...
-
 if not exist "%MQL5%\Experts\GoldFX_Intraday" mkdir "%MQL5%\Experts\GoldFX_Intraday"
 if not exist "%MQL5%\Include\GoldFX" mkdir "%MQL5%\Include\GoldFX"
 if not exist "%MQL5%\Presets" mkdir "%MQL5%\Presets"
@@ -60,12 +43,6 @@ xcopy /E /I /Y "%SRC%\Include\GoldFX\*" "%MQL5%\Include\GoldFX\"
 if exist "%SRC%\Presets" xcopy /Y "%SRC%\Presets\*" "%MQL5%\Presets\"
 
 echo.
-echo [OK] Installed to:
-echo   %MQL5%\Experts\GoldFX_Intraday
-echo   %MQL5%\Include\GoldFX
-echo   %MQL5%\Presets
-echo.
-echo Next: MetaEditor - open GoldFX_Intraday.mq5 - press F7 - attach to chart
-echo.
+echo [OK] Done. Open MetaEditor and compile GoldFX_Intraday.mq5
 pause
 endlocal
