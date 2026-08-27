@@ -26,20 +26,25 @@ if (-not (Test-Path $Mql5Path)) {
     exit 1
 }
 
-$destExperts = Join-Path $Mql5Path "Experts\GoldFX_Intraday"
-$destInclude = Join-Path $Mql5Path "Include\GoldFX"
-$destPresets = Join-Path $Mql5Path "Presets"
+$destIntraday = Join-Path $Mql5Path "Experts\GoldFX_Intraday"
+$destBasis    = Join-Path $Mql5Path "Experts\GoldFX_BasisArb"
+$destInclude  = Join-Path $Mql5Path "Include\GoldFX"
+$destPresets  = Join-Path $Mql5Path "Presets"
 
-New-Item -ItemType Directory -Force -Path $destExperts, $destInclude, $destPresets | Out-Null
+New-Item -ItemType Directory -Force -Path $destIntraday, $destBasis, $destInclude, $destPresets | Out-Null
 
-Copy-Item -Path (Join-Path $Src "Experts\GoldFX_Intraday\*") -Destination $destExperts -Recurse -Force
+Copy-Item -Path (Join-Path $Src "Experts\GoldFX_Intraday\*") -Destination $destIntraday -Recurse -Force
+if (Test-Path (Join-Path $Src "Experts\GoldFX_BasisArb")) {
+    Copy-Item -Path (Join-Path $Src "Experts\GoldFX_BasisArb\*") -Destination $destBasis -Recurse -Force
+}
 Copy-Item -Path (Join-Path $Src "Include\GoldFX\*") -Destination $destInclude -Recurse -Force
 if (Test-Path (Join-Path $Src "Presets")) {
     Copy-Item -Path (Join-Path $Src "Presets\*") -Destination $destPresets -Force
 }
 
 Write-Host "[OK] Installed." -ForegroundColor Green
-Write-Host "  $destExperts"
+Write-Host "  $destIntraday"
+Write-Host "  $destBasis"
 Write-Host "  $destInclude"
 Write-Host "  $destPresets"
-Write-Host "Next: MetaEditor F7 compile GoldFX_Intraday.mq5"
+Write-Host "Next: MetaEditor F7 compile GoldFX_Intraday.mq5 and GoldFX_BasisArb.mq5"

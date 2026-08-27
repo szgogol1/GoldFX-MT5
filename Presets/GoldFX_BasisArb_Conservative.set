@@ -1,0 +1,26 @@
+; GoldFX 基差套利 — 保守（更高Z、更短持仓）
+InpSpotSymbol=XAUUSD
+InpFutSymbol=XAUUSD.f
+InpTF=15
+InpSpreadMode=0
+InpLookback=80
+InpEntryZ=2.5
+InpExitZ=0.50
+InpStopZ=4.0
+InpMinCorr=0.90
+InpMinBars=160
+InpMaxHoldBars=32
+InpCooldownBars=6
+InpLotSpot=0.05
+InpAutoHedge=true
+InpMaxDailyLossPct=1.5
+InpMaxSpreadSpot=0.50
+InpMaxSpreadFut=0.70
+InpAllowTrade=true
+InpSignalOnly=false
+InpMagic=20260827
+InpUseSession=true
+InpSessStart=2
+InpSessEnd=21
+InpFridayCut=true
+InpFridayHour=17

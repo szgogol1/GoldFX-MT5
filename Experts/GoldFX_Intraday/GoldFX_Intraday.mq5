@@ -341,7 +341,7 @@ void ProcessSignals(void)
    const int n = g_portfolio.ScanNewBars(sigs, g_params.run_mode);
    if(n <= 0)
      {
-      g_status = "等待七条件齐备 / 新K线";
+      g_status = "等待回调+ADX条件 / 新K线";
       return;
      }
 
@@ -423,7 +423,7 @@ int OnInit()
 
    g_dash.Create(ChartID(), g_params);
    EventSetTimer(15);
-   RefreshUI("v3 已启动");
+   RefreshUI("v3.1 回调优化已启动");
    if(g_tg.Enabled())
       g_tg.NotifyEvent(StringFormat("GoldFX v3 started on %s symbols=%d", _Symbol, g_portfolio.Count()));
 
