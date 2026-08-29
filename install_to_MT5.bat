@@ -32,17 +32,22 @@ if not exist "%MQL5%" (
 
 if not exist "%MQL5%\Experts\GoldFX_Intraday" mkdir "%MQL5%\Experts\GoldFX_Intraday"
 if not exist "%MQL5%\Experts\GoldFX_BasisArb" mkdir "%MQL5%\Experts\GoldFX_BasisArb"
+if not exist "%MQL5%\Experts\GlobalBasis" mkdir "%MQL5%\Experts\GlobalBasis"
 if not exist "%MQL5%\Include\GoldFX" mkdir "%MQL5%\Include\GoldFX"
+if not exist "%MQL5%\Include\GlobalBasis" mkdir "%MQL5%\Include\GlobalBasis"
 if not exist "%MQL5%\Presets" mkdir "%MQL5%\Presets"
 
 xcopy /E /I /Y "%SRC%\Experts\GoldFX_Intraday\*" "%MQL5%\Experts\GoldFX_Intraday\"
 xcopy /E /I /Y "%SRC%\Experts\GoldFX_BasisArb\*" "%MQL5%\Experts\GoldFX_BasisArb\"
+if exist "%SRC%\Experts\GlobalBasis" xcopy /E /I /Y "%SRC%\Experts\GlobalBasis\*" "%MQL5%\Experts\GlobalBasis\"
 xcopy /E /I /Y "%SRC%\Include\GoldFX\*" "%MQL5%\Include\GoldFX\"
+if exist "%SRC%\Include\GlobalBasis" xcopy /E /I /Y "%SRC%\Include\GlobalBasis\*" "%MQL5%\Include\GlobalBasis\"
 if exist "%SRC%\Presets" xcopy /Y "%SRC%\Presets\*" "%MQL5%\Presets\"
 
 echo.
 echo [OK] Done. Compile in MetaEditor:
 echo   GoldFX_Intraday.mq5
 echo   GoldFX_BasisArb.mq5
+echo   GlobalBasis_Lifecycle.mq5
 pause
 endlocal

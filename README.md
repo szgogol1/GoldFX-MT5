@@ -1,3 +1,23 @@
+# GoldFX Intraday v3 + GlobalBasis 4.0
+
+## GlobalBasis 4.0 — AI 策略生命周期（ASSISTED）
+
+**AI = 分析师，不是无限制交易员。** 详见 `docs/GlobalBasis/GlobalBasis_4.0_Architecture.md`。
+
+| 组件 | 路径 |
+|------|------|
+| 生命周期总装 | `Include/GlobalBasis/GB_Lifecycle.mqh` |
+| 硬风控（AI 不可放宽） | `Include/GlobalBasis/GB_HardRisk.mqh` |
+| 规则化 AI 分析师 | `Include/GlobalBasis/GB_AIAnalyst.mqh` |
+| Shadow / 人工批准 | `GB_Shadow.mqh` / `GB_Approval.mqh` |
+| Demo 面板 EA | `Experts/GlobalBasis/GlobalBasis_Lifecycle.mq5` |
+
+Phase 1：**ASSISTED** — AI 只产出 KEEP / REDUCE_RISK / SUSPEND / NO_TRADE / PROPOSE_V2；`PROPOSE_V2` 进 Shadow；**人工 APPROVE** 后才升版。Hard DD / Daily Loss / Emergency Stop 为强制闸门。
+
+编译：`GlobalBasis_Lifecycle.mq5` → 挂图查看健康面板与 `[APPROVE][REJECT][IGNORE]`。
+
+---
+
 # GoldFX Intraday v3 — 七条件 + 组合基础设施
 
 ## Windows 安装
