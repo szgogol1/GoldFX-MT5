@@ -77,11 +77,43 @@ Z_t = \frac{B_t - \mu_B}{\sigma_B}
 
 结构止损 + 最低盈亏比 1.8:1；TP 默认 2.8 ATR。
 
+## MT4 基差专业图表（`GoldFX_BasisPro`）
+
+期现货 K 线叠加 + 基差彩色柱 + Z 分策略档位线 + **面板 EA 交易**，与 `GoldFX_BasisArb` 参数对齐。
+
+| 文件 | 作用 |
+|------|------|
+| `Experts/GoldFX_BasisPro/GoldFX_BasisPro.mq4` | **EA 面板**：监控 + 自动/手动 + 下单/全平 + Z 止损 |
+| `Indicators/GoldFX_BasisPro/GoldFX_BasisPro_Overlay.mq4` | 主图：现货原生 K 线 + 期货叠加蜡烛（蓝阳/橙阴）+ 现货金线 |
+| `Indicators/GoldFX_BasisPro/GoldFX_BasisPro_Spread.mq4` | 副图：基差柱状图，按档位着色（黄出场/灰观望/红空基差/绿多基差/深红深绿止损）+ μ 与 ±Z 线 |
+
+### EA 面板按钮
+
+| 按钮 | 功能 |
+|------|------|
+| **自动** | Z 分自动入场（新 K 线触发） |
+| **手动** | 仅面板按钮下单，不自动入场 |
+| **止损:开/关** | Z 回归出场 + Z 止损 + 超时平仓 |
+| **空基差** | 空期货 + 多现货 |
+| **多基差** | 多期货 + 空现货 |
+| **全平** | 双边平仓 |
+
+**安装（Windows）**
+
+1. 双击 `install_to_MT4.bat`，粘贴 MT4 的 `MQL4` 路径  
+2. MetaEditor 编译 EA + 两个指标  
+3. 打开现货图（如 `XAUUSD.s` M15），拖入 **EA** + **两个指标**  
+4. 三者 `InpFutSymbol` 设为同一期货代码（如 `GC`）  
+5. 勾选「允许自动交易」；EA 预设 `MT4/Presets/GoldFX_BasisPro_EA_M15.set`
+
+副图柱色与策略档位：`Z≥+EntryZ` 红（空期+多现），`Z≤-EntryZ` 绿（多期+空现），`|Z|≤ExitZ` 黄（出场），`|Z|≥StopZ` 深红/深绿（止损）。
+
 ## 目录
 
 ```
 Experts/GoldFX_Intraday/GoldFX_Intraday.mq5   # 日内七条件
 Experts/GoldFX_BasisArb/GoldFX_BasisArb.mq5   # 现货-期货基差套利
+Indicators/GoldFX_BasisPro/                   # MT4 基差专业图表
 Include/GoldFX/
   SevenConditionStrategy.mqh
   BasisArbitrage.mqh           # 基差 Z 分引擎
