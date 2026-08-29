@@ -1,0 +1,12 @@
+; GoldFX BasisPro MT4 — 现货 XAUUSD.s + 期货 GC, M15
+; 两个指标均需加载，InpFutSymbol 保持一致
+InpFutSymbol=GC
+InpLookback=60
+InpMinBars=30
+InpEntryZ=2.0
+InpExitZ=0.40
+InpStopZ=3.5
+InpShowLevels=true
+InpShowLegend=true
+InpShowFutCandles=true
+InpShowSpotClose=true
