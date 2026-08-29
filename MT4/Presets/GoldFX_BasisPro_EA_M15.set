@@ -1,0 +1,22 @@
+; GoldFX BasisPro EA — 现货 XAUUSD.s + 期货 GC, M15
+InpSpotSymbol=
+InpFutSymbol=GC
+InpMagic=20260829
+InpSlippage=30
+InpLookback=60
+InpMinBars=30
+InpEntryZ=2.0
+InpExitZ=0.40
+InpStopZ=3.5
+InpMinCorr=0.85
+InpMaxHoldBars=48
+InpCooldownBars=4
+InpLotSpot=0.10
+InpAutoHedge=true
+InpMaxDailyLossPct=2.0
+InpUseSession=true
+InpSessStart=1
+InpSessEnd=22
+InpFridayCut=true
+InpFridayHour=18
+InpShowPanel=true
