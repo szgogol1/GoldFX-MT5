@@ -1,0 +1,21 @@
+; GoldFX 期现套利监测 — IC Markets SC
+; 现货: XAUUSD 或 XAUUSD.s（以终端显示为准）
+; 期货: GCZ26_CFD（到期前换下一月合约）
+InpSpotSymbol=XAUUSD
+InpFutSymbol=GCZ26_CFD
+InpTF=15
+InpSpreadMode=0
+InpLookback=60
+InpEntryZ=2.0
+InpExitZ=0.40
+InpStopZ=3.5
+InpMinCorr=0.88
+InpMinBars=120
+InpMinCostEdge=1.5
+InpContractTolPct=5.0
+InpMinDaysExpiry=14
+InpMaxSpreadSpot=0.60
+InpMaxSpreadFut=0.80
+InpShowPanel=true
+InpPanelX=12
+InpPanelY=28
