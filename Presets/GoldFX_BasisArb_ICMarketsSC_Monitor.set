@@ -1,0 +1,27 @@
+; GoldFX 基差套利 — IC Markets SC 仅信号监测（不开仓）
+InpSpotSymbol=XAUUSD
+InpFutSymbol=GCZ26_CFD
+InpTF=15
+InpSpreadMode=0
+InpLookback=60
+InpEntryZ=2.0
+InpExitZ=0.40
+InpStopZ=3.5
+InpMinCorr=0.88
+InpMinBars=120
+InpMaxHoldBars=48
+InpCooldownBars=4
+InpLotSpot=0.10
+InpAutoHedge=true
+InpMaxDailyLossPct=2.0
+InpMaxSpreadSpot=0.60
+InpMaxSpreadFut=0.80
+InpAllowTrade=true
+InpSignalOnly=true
+InpMagic=20260901
+InpSlippage=40
+InpUseSession=true
+InpSessStart=1
+InpSessEnd=22
+InpFridayCut=true
+InpFridayHour=18
