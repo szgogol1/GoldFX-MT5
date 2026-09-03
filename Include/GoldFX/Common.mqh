@@ -14,7 +14,8 @@ enum ENUM_RUN_MODE { MODE_AUTO=0, MODE_TREND=1, MODE_RANGE=2, MODE_FLAT=3 };
 enum ENUM_STRATEGY_ENGINE
   {
    STRAT_SEVEN_COND  = 0,  // 七条件同时满足（SafeScalper 风格，默认）
-   STRAT_REGIME_AUTO = 1   // 趋势/震荡体制切换
+   STRAT_REGIME_AUTO = 1,  // 趋势/震荡体制切换
+   STRAT_ORDER_FLOW  = 2   // 日内订单流（Delta/CVD/VWAP）
   };
 
 enum ENUM_MONEY_MODE
@@ -56,6 +57,30 @@ struct SSevenCondSnapshot
    string fail_reason;
   };
 
+// 订单流诊断快照（日志/仪表盘）
+struct SOrderFlowSnapshot
+  {
+   double bar_delta;
+   double bar_buy_vol;
+   double bar_sell_vol;
+   double bar_volume;
+   double imbalance_pct;   // |delta|/vol * 100
+   double cvd;
+   double cvd_slope;
+   double vwap;
+   double poc;
+   double vah;
+   double val;
+   bool   pos_ok;
+   bool   delta_ok;
+   bool   cvd_ok;
+   bool   absorb_ok;
+   bool   structure_ok;
+   bool   book_ok;
+   bool   book_available;
+   string fail_reason;
+  };
+
 struct SSignalResult
   {
    ENUM_SIGNAL signal;
@@ -67,7 +92,9 @@ struct SSignalResult
    int         quality;
    double      risk_pct_used;
    string      reason;
+   string      engine_tag;   // "7C" / "OF" — 下单注释
    SSevenCondSnapshot seven;
+   SOrderFlowSnapshot oflow;
   };
 
 struct SRuntimeParams
@@ -113,6 +140,28 @@ struct SRuntimeParams
    int    sc_swing_sl_bars;     // 结构止损摆动窗口
    double sc_min_rr;            // 最低盈亏比
    double sc_sl_atr_max;        // SL 最大 ATR 倍数
+   // 订单流引擎
+   int    of_stack_bars;        // 堆叠失衡检测窗口
+   int    of_min_pos_delta;     // 窗口内最少同向 Delta 根数
+   double of_imbalance_pct;     // |Delta|/Vol 最低百分比
+   int    of_cvd_slope_bars;    // CVD 斜率回溯根数
+   bool   of_allow_divergence;  // 允许 CVD 背离反转入场
+   bool   of_use_absorption;    // 吸收过滤
+   double of_absorb_vol_mult;   // 吸收：相对均量倍数
+   double of_absorb_range_atr;  // 吸收：最大价格位移 ATR
+   bool   of_use_htf;           // H1 结构过滤
+   int    of_htf_ema;           // H1 EMA 周期
+   double of_sl_atr;            // SL ATR 缓冲
+   double of_tp_atr;            // TP ATR 倍数
+   double of_sl_atr_max;        // SL 最大 ATR
+   double of_min_rr;            // 最低盈亏比
+   int    of_swing_sl_bars;     // 结构止损摆动窗口
+   double of_va_pct;            // Value Area 体积占比（默认 0.70）
+   int    of_bucket_points;     // 成交量分布桶宽（点）
+   bool   of_use_book;          // 尝试订阅 DOM
+   bool   of_draw_levels;       // 画 VWAP/POC/VA
+   bool   of_exit_delta_flip;   // 反向堆叠失衡离场
+   bool   of_exit_cvd_div;      // CVD 背离离场
    // 选择性 / 过滤器
    int    min_quality_score;
    int    max_trades_per_day;
@@ -262,6 +311,7 @@ string ModeToString(const ENUM_RUN_MODE m)
 string StratToString(const ENUM_STRATEGY_ENGINE e)
   {
    if(e==STRAT_SEVEN_COND) return "七条件";
+   if(e==STRAT_ORDER_FLOW) return "订单流";
    return "体制切换";
   }
 
@@ -290,9 +340,21 @@ string SignalToString(const ENUM_SIGNAL s)
 void InitSignal(SSignalResult &r)
   {
    r.signal=SIGNAL_NONE; r.symbol=""; r.entry=0; r.sl=0; r.tp=0;
-   r.atr=0; r.quality=0; r.risk_pct_used=0; r.reason="";
+   r.atr=0; r.quality=0; r.risk_pct_used=0; r.reason=""; r.engine_tag="7C";
    ZeroMemory(r.seven);
    r.seven.fail_reason="";
+   ZeroMemory(r.oflow);
+   r.oflow.fail_reason="";
+  }
+
+string OrderFlowFlags(const SOrderFlowSnapshot &s)
+  {
+   return StringFormat("OF %s%s%s%s%s%s | Δ=%.0f Imb=%.0f%% CVD=%.0f slope=%.0f VWAP=%.2f POC=%.2f VA=%.2f/%.2f",
+                       s.pos_ok?"P":"-", s.delta_ok?"D":"-", s.cvd_ok?"C":"-",
+                       s.absorb_ok?"A":"-", s.structure_ok?"S":"-",
+                       (s.book_available?(s.book_ok?"B":"b"):"x"),
+                       s.bar_delta, s.imbalance_pct, s.cvd, s.cvd_slope,
+                       s.vwap, s.poc, s.val, s.vah);
   }
 
 // 解析 CSV 品种列表，最多 8 个

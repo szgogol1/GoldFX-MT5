@@ -110,7 +110,8 @@ public:
       cy += 18;
       Lab(DB_PREFIX "sig", m_x+8, cy, "信号...", 8);
       cy += 18;
-      Lab(DB_PREFIX "seven", m_x+8, cy, "七条件: --------", 8);
+      // 七条件或订单流诊断共用一行
+      Lab(DB_PREFIX "seven", m_x+8, cy, "信号诊断: --------", 8);
       cy += 18;
       Lab(DB_PREFIX "risk", m_x+8, cy, "风险...", 8);
       cy += 18;
