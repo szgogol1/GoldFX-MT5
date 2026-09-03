@@ -1,10 +1,13 @@
-# GoldFX Intraday v3 — 七条件 + 组合基础设施
+# GoldFX Intraday v3 — 七条件 + 组合基础设施 + 订单流
 
 ## Windows 安装
 
 1. 克隆或解压仓库到本机，例如 `D:\GoldFX-MT5\`
 2. 双击 `install_to_MT5.bat`（或 `install_to_MT5.ps1`），粘贴 MT5 的 `MQL5` 路径
-3. MetaEditor 打开 `Experts\GoldFX_Intraday\GoldFX_Intraday.mq5`，按 **F7** 编译
+3. MetaEditor 打开对应 EA，按 **F7** 编译：
+   - `Experts\GoldFX_Intraday\GoldFX_Intraday.mq5`
+   - `Experts\GoldFX_BasisArb\GoldFX_BasisArb.mq5`
+   - `Experts\GoldFX_OrderFlow\GoldFX_OrderFlow.mq5`
 4. 可选：双击 `open_MetaEditor.bat` 启动 MetaEditor
 
 云端环境无法直接写入你电脑的 `D:` 盘，需本机完成上述步骤。
@@ -16,14 +19,55 @@ GitHub：https://github.com/szgogol1/GoldFX-MT5
 
 - **七条件缺一不可**入场（EMA 趋势/强度/价格位置/突破/RSI/动量/H1 确认）
 - **黄金现货–期货基差均值回归套利**（Z 分双边对冲）
+- **日内订单流**（Tick Delta / CVD / VWAP·POC·VA + 可选 DOM）
 - **无网格 · 无马丁 · 一次一笔/每品种一笔**
 - **自适应风险引擎**（回撤降仓、ATR 反比、滚动胜率调整）
-- **单图多品种**（最多 8，CSV 配置）+ **相关性保护**
+- **单图多品种**（最多 8，CSV 配置）+ **相关性保护**（七条件 EA）
 - **Telegram** 推送与 `/status /stop /resume /risk`（原生 WebRequest，无 DLL）
 - **Forge 仪表盘**（回测自动禁用）
 - **峰值回撤持久化**、交易 CSV 日志、新闻/周五/时段过滤
 
 > 非官方克隆。研究与模拟用途。实盘前请充分测试。
+
+## 日内订单流（`GoldFX_OrderFlow`）
+
+### 原理（零售 MT5 近似）
+
+外汇/黄金零售盘通常没有真实 CME Footprint。本 EA 用可审计的近似：
+
+| 组件 | 实现 |
+|------|------|
+| Tape | `CopyTicks` + Lee-Ready / `TICK_FLAG_BUY·SELL` 分类主动买/卖 |
+| Delta / CVD | 每根 K 的 buy−sell；会话累计 CVD（换日重置） |
+| 堆叠失衡 | 近 N 根同向 Delta + `\|Δ\|/Vol ≥ ImbalancePct` |
+| 成交量分布 | 会话 VWAP、POC、VAH/VAL（价格桶） |
+| 吸收 | 高量 + 窄幅后 Delta 翻转 → 禁止追价 |
+| DOM（可选） | `MarketBookGet`；经纪商无深度或测试器中静默降级 |
+
+### 入场（已收盘 K，缺一不可）
+
+1. **位置**：收盘在会话 VWAP 正确一侧，或回踩 POC/VA 后收回  
+2. **主动单边**：堆叠失衡达到阈值  
+3. **CVD**：斜率同向，或允许背离反转  
+4. **吸收过滤**：高点/低点吸收则否决追单  
+5. **结构**：可选 H1 EMA + 日 VWAP 同向  
+6. **闸门**：点差 / 新闻 / 时段 / 日交易上限（复用现有过滤器）
+
+止损：摆动结构或 POC/VA 外侧 + ATR 封顶；止盈：ATR 或对侧 VA，最低 RR 可配。  
+额外离场：反向堆叠失衡 / CVD 背离（可关）。
+
+### 使用
+
+1. 编译 `Experts/GoldFX_OrderFlow/GoldFX_OrderFlow.mq5`  
+2. 挂 **XAUUSD M5**（外汇同理换品种）；Magic 默认 `20260903`，可与七条件并存  
+3. 加载 `GoldFX_OrderFlow_XAUUSD_M5.set`，或先用 `GoldFX_OrderFlow_Conservative.set`（默认 `AllowTrade=false`）  
+4. 策略测试器必须选 **Every tick based on real ticks**；DOM 在测试器通常不可用  
+
+### 限制
+
+- 这是零售报价流近似，不是交易所 Level 2 订单流  
+- 点差大、Tick 稀疏的品种噪声更大  
+- 务必先模拟观察 CVD/VWAP 画线是否合理，再开 `InpAllowTrade`
 
 ## 黄金期货 / 现货基差套利（`GoldFX_BasisArb`）
 
@@ -82,24 +126,28 @@ Z_t = \frac{B_t - \mu_B}{\sigma_B}
 ```
 Experts/GoldFX_Intraday/GoldFX_Intraday.mq5   # 日内七条件
 Experts/GoldFX_BasisArb/GoldFX_BasisArb.mq5   # 现货-期货基差套利
+Experts/GoldFX_OrderFlow/GoldFX_OrderFlow.mq5 # 日内订单流
 Include/GoldFX/
   SevenConditionStrategy.mqh
-  BasisArbitrage.mqh           # 基差 Z 分引擎
+  OrderFlowTape.mqh / VolumeProfile.mqh / OrderFlowBook.mqh / OrderFlowStrategy.mqh
+  BasisArbitrage.mqh
   PortfolioEngine.mqh / AdaptiveRisk.mqh / ...
 Presets/
   GoldFX_XAUUSD_M5_SevenCond.set
+  GoldFX_OrderFlow_XAUUSD_M5.set
+  GoldFX_OrderFlow_Conservative.set
   GoldFX_BasisArb_M15.set
-  GoldFX_BasisArb_Conservative.set
   ...
 ```
 
 ## 安装
 
 1. 复制到 MT5 `MQL5/Experts` 与 `MQL5/Include/GoldFX`、`MQL5/Presets`  
-2. MetaEditor **F7** 编译两个 EA  
-3. 日内策略：挂 **XAUUSD M5**（推荐伦敦–纽约）  
-4. 基差套利：挂现货图，填好期货品种名  
-5. Telegram：工具 → 选项 → 专家 → 允许 `https://api.telegram.org`
+2. MetaEditor **F7** 编译三个 EA  
+3. 七条件：挂 **XAUUSD M5**（推荐伦敦–纽约）  
+4. 订单流：挂 **XAUUSD M5**，真实 tick 回测  
+5. 基差套利：挂现货图，填好期货品种名  
+6. Telegram：工具 → 选项 → 专家 → 允许 `https://api.telegram.org`
 
 ## 推荐起步
 
@@ -111,6 +159,8 @@ Presets/
 | 时段 | `Phase4_Session_DayCap.set` |
 | 黄金即用 | `GoldFX_XAUUSD_M5_SevenCond.set` |
 | 多品种 | `GoldFX_Portfolio_Major.set`（`InpSymbols=XAUUSD,XAGUSD,...`） |
+| 订单流 | `GoldFX_OrderFlow_XAUUSD_M5.set` |
+| 订单流观察 | `GoldFX_OrderFlow_Conservative.set`（先关交易） |
 | 基差套利 | `GoldFX_BasisArb_M15.set`（先改期货品种名） |
 | 基差保守 | `GoldFX_BasisArb_Conservative.set` |
 
@@ -126,4 +176,4 @@ Presets/
 
 ## 免责声明
 
-交易有亏损风险。新闻日历依赖终端数据；部分经纪商/测试器可能无日历（过滤器会安全降级）。务必先模拟。
+交易有亏损风险。新闻日历依赖终端数据；部分经纪商/测试器可能无日历（过滤器会安全降级）。订单流为零售盘近似，务必先模拟。

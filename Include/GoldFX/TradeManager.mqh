@@ -74,7 +74,9 @@ public:
       if(!m_risk.MarginSafe(symbol, lot, ot, reason)) { msg=reason; return false; }
 
       m_trade.SetTypeFillingBySymbol(symbol);
-      string cmt = StringFormat("Q%d|7C", sig.quality);
+      string tag = sig.engine_tag;
+      if(StringLen(tag)==0) tag = "7C";
+      string cmt = StringFormat("Q%d|%s", sig.quality, tag);
       if(StringLen(cmt)>31) cmt = StringSubstr(cmt,0,31);
 
       bool ok = (sig.signal==SIGNAL_BUY)
