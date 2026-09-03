@@ -67,9 +67,11 @@ if [[ -z "${DISPLAY:-}" ]]; then
   echo "ERROR: could not allocate an Xvfb display for MetaEditor." >&2
   exit 1
 fi
-# Wait for the display to accept connections.
+# Wait for the display to accept connections (use `if` so `set -e` is not tripped).
 for _ in $(seq 1 30); do
-  [[ -e "/tmp/.X${DISPLAY#:}-lock" ]] && wine cmd /c "echo ok" >/dev/null 2>&1 && break
+  if [[ -e "/tmp/.X${DISPLAY#:}-lock" ]] && wine cmd /c "echo ok" >/dev/null 2>&1; then
+    break
+  fi
   sleep 0.5
 done
 echo "==> Using display ${DISPLAY} for MetaEditor"
