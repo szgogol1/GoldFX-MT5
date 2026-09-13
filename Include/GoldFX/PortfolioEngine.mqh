@@ -12,6 +12,7 @@
 #include "RegimeDetector.mqh"
 #include "TrendStrategy.mqh"
 #include "RangeStrategy.mqh"
+#include "BoxBreakoutStrategy.mqh"
 
 #define GFX_MAX_SYMBOLS 8
 
@@ -23,14 +24,17 @@ private:
    CRegimeDetector          m_regime[GFX_MAX_SYMBOLS];
    CTrendStrategy           m_trend[GFX_MAX_SYMBOLS];
    CRangeStrategy           m_range[GFX_MAX_SYMBOLS];
+   CBoxBreakoutStrategy     m_box[GFX_MAX_SYMBOLS];
    datetime                 m_last_bar[GFX_MAX_SYMBOLS];
    ENUM_STRATEGY_ENGINE     m_engine;
    ENUM_TIMEFRAMES          m_tf;
    int                      m_count;
    SSevenCondSnapshot       m_dash_snap; // 图表品种快照
+   string                   m_box_status; // 箱体引擎状态（仪表盘）
 
 public:
-                     CPortfolioEngine(void): m_engine(STRAT_SEVEN_COND), m_tf(PERIOD_CURRENT), m_count(0)
+                     CPortfolioEngine(void): m_engine(STRAT_SEVEN_COND), m_tf(PERIOD_CURRENT), m_count(0),
+                                             m_box_status("")
                      {
                       ZeroMemory(m_dash_snap);
                       ArrayResize(m_symbols, 0);
@@ -41,6 +45,7 @@ public:
    int Count(void) const { return m_count; }
    string SymbolAt(const int i) const { return (i>=0 && i<m_count)? m_symbols[i] : ""; }
    SSevenCondSnapshot DashSnapshot(void) const { return m_dash_snap; }
+   string BoxStatus(void) const { return m_box_status; }
 
    bool Init(const string symbols_csv, const ENUM_TIMEFRAMES tf, const SRuntimeParams &p)
      {
@@ -56,6 +61,10 @@ public:
          if(m_engine == STRAT_SEVEN_COND)
            {
             if(!m_seven[i].Init(m_symbols[i], tf, p)) return false;
+           }
+         else if(m_engine == STRAT_BOX_BREAKOUT)
+           {
+            if(!m_box[i].Init(m_symbols[i], tf, p)) return false;
            }
          else
            {
@@ -76,6 +85,10 @@ public:
            {
             if(!m_seven[i].Configure(p)) return false;
            }
+         else if(m_engine == STRAT_BOX_BREAKOUT)
+           {
+            if(!m_box[i].Configure(p)) return false;
+           }
          else
            {
             if(!m_regime[i].Configure(p)) return false;
@@ -94,8 +107,10 @@ public:
          m_regime[i].Release();
          m_trend[i].Release();
          m_range[i].Release();
+         m_box[i].Release();
         }
       m_count = 0;
+      m_box_status = "";
      }
 
    // 扫描全部品种；out_signals 装入有效信号（可能0）
@@ -111,9 +126,11 @@ public:
          const bool is_new = (bar != 0 && bar != m_last_bar[i]);
          if(!is_new)
            {
-            // 仍刷新图表品种七条件快照供仪表盘
+            // 仍刷新图表品种快照供仪表盘
             if(m_engine==STRAT_SEVEN_COND && m_symbols[i]==_Symbol)
                m_dash_snap = m_seven[i].LastSnapshot();
+            if(m_engine==STRAT_BOX_BREAKOUT && m_symbols[i]==_Symbol)
+               m_box_status = m_box[i].LastStatus();
             continue;
            }
          m_last_bar[i] = bar;
@@ -129,6 +146,13 @@ public:
             sig = m_seven[i].Evaluate(true);
             if(m_symbols[i]==_Symbol)
                m_dash_snap = m_seven[i].LastSnapshot();
+           }
+         else if(m_engine == STRAT_BOX_BREAKOUT)
+           {
+            sig = m_box[i].Evaluate();
+            if(m_symbols[i]==_Symbol)
+               m_box_status = m_box[i].LastStatus();
+            sig.symbol = m_symbols[i];
            }
          else
            {
@@ -155,13 +179,25 @@ public:
    // 强制刷新图表品种快照（非新K也可）
    void RefreshDashSnapshot(void)
      {
-      if(m_engine != STRAT_SEVEN_COND) return;
-      for(int i=0;i<m_count;++i)
+      if(m_engine == STRAT_SEVEN_COND)
         {
-         if(m_symbols[i] != _Symbol) continue;
-         m_seven[i].Evaluate(false);
-         m_dash_snap = m_seven[i].LastSnapshot();
-         break;
+         for(int i=0;i<m_count;++i)
+           {
+            if(m_symbols[i] != _Symbol) continue;
+            m_seven[i].Evaluate(false);
+            m_dash_snap = m_seven[i].LastSnapshot();
+            break;
+           }
+         return;
+        }
+      if(m_engine == STRAT_BOX_BREAKOUT)
+        {
+         for(int i=0;i<m_count;++i)
+           {
+            if(m_symbols[i] != _Symbol) continue;
+            m_box_status = m_box[i].LastStatus();
+            break;
+           }
         }
      }
   };
