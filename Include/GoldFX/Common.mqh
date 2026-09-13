@@ -13,8 +13,11 @@ enum ENUM_RUN_MODE { MODE_AUTO=0, MODE_TREND=1, MODE_RANGE=2, MODE_FLAT=3 };
 
 enum ENUM_STRATEGY_ENGINE
   {
-   STRAT_SEVEN_COND  = 0,  // 七条件同时满足（SafeScalper 风格，默认）
-   STRAT_REGIME_AUTO = 1   // 趋势/震荡体制切换
+   STRAT_SEVEN_COND    = 0,  // 七条件同时满足（SafeScalper 风格，默认）
+   STRAT_REGIME_AUTO   = 1,  // 趋势/震荡体制自动切换
+   STRAT_TREND_ONLY    = 2,  // 仅趋势策略
+   STRAT_RANGE_ONLY    = 3,  // 仅震荡策略
+   STRAT_BOX_BREAKOUT  = 4   // 顺势小箱体突破
   };
 
 enum ENUM_MONEY_MODE
@@ -91,6 +94,22 @@ struct SRuntimeParams
    double rsi_overbought;
    double range_sl_atr_mult;
    double range_tp_atr_mult;
+   // 顺势小箱体突破
+   int    box_lookback;
+   int    box_min_bars;
+   double box_width_min_atr;
+   double box_width_max_atr;
+   double box_break_buf_atr;
+   int    box_ema_fast;
+   int    box_ema_slow;
+   double box_min_adx;
+   double box_sl_buf_atr;
+   double box_tp_height_mult;
+   double box_min_rr;
+   bool   box_use_htf;
+   int    box_htf_fast;
+   int    box_htf_slow;
+   int    box_touch_min;
    // 七条件引擎
    int    sc_ema_fast;          // 150
    int    sc_ema_slow;          // 510
@@ -261,7 +280,10 @@ string ModeToString(const ENUM_RUN_MODE m)
 
 string StratToString(const ENUM_STRATEGY_ENGINE e)
   {
-   if(e==STRAT_SEVEN_COND) return "七条件";
+   if(e==STRAT_SEVEN_COND)   return "七条件";
+   if(e==STRAT_TREND_ONLY)   return "趋势";
+   if(e==STRAT_RANGE_ONLY)   return "震荡";
+   if(e==STRAT_BOX_BREAKOUT) return "顺势箱体";
    return "体制切换";
   }
 
