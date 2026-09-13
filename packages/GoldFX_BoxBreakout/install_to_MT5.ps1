@@ -35,7 +35,7 @@ Copy-Item -Path (Join-Path $Src "Experts\GoldFX_BoxBreakout\*") -Destination $de
 Copy-Item -Path (Join-Path $Src "Include\GoldFX_Box\*") -Destination $destInclude -Recurse -Force
 Copy-Item -Path (Join-Path $Src "Presets\*") -Destination $destPresets -Force
 
-Write-Host "[OK] 已安装独立箱体包" -ForegroundColor Green
+Write-Host "[OK] 已安装独立箱体包（EA 同目录含 .mqh，可直接 F7）" -ForegroundColor Green
 Write-Host "  $destExpert"
 Write-Host "  $destInclude"
 Write-Host "  $destPresets"

@@ -2,12 +2,12 @@
 //| GoldFX_BoxBreakout.mq5 — standalone with-trend box breakout EA   |
 //+------------------------------------------------------------------+
 #property copyright "GoldFX BoxBreakout"
-#property version   "1.01"
+#property version   "1.02"
 #property description "Standalone with-trend small-box breakout EA"
 
-#include <GoldFX_Box/Common.mqh>
-#include <GoldFX_Box/BoxBreakoutStrategy.mqh>
-#include <GoldFX_Box/PositionTrail.mqh>
+#include "Common.mqh"
+#include "BoxBreakoutStrategy.mqh"
+#include "PositionTrail.mqh"
 #include <Trade\Trade.mqh>
 
 input group "=== Runtime ==="
