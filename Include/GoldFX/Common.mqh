@@ -13,9 +13,8 @@ enum ENUM_RUN_MODE { MODE_AUTO=0, MODE_TREND=1, MODE_RANGE=2, MODE_FLAT=3 };
 
 enum ENUM_STRATEGY_ENGINE
   {
-   STRAT_SEVEN_COND    = 0,  // 七条件同时满足（SafeScalper 风格，默认）
-   STRAT_REGIME_AUTO   = 1,  // 趋势/震荡体制切换
-   STRAT_BOX_BREAKOUT  = 2   // 顺势小箱体突破（只做顺势）
+   STRAT_SEVEN_COND  = 0,  // 七条件同时满足（SafeScalper 风格，默认）
+   STRAT_REGIME_AUTO = 1   // 趋势/震荡体制切换
   };
 
 enum ENUM_MONEY_MODE
@@ -92,22 +91,6 @@ struct SRuntimeParams
    double rsi_overbought;
    double range_sl_atr_mult;
    double range_tp_atr_mult;
-   // 顺势小箱体突破
-   int    box_lookback;         // 箱体回看根数
-   int    box_min_bars;         // 箱内最少收盘根数
-   double box_width_min_atr;    // 最小箱宽（ATR）
-   double box_width_max_atr;    // 最大箱宽（ATR）
-   double box_break_buf_atr;    // 突破缓冲（ATR）
-   int    box_ema_fast;         // 图表趋势快 EMA
-   int    box_ema_slow;         // 图表趋势慢 EMA
-   double box_min_adx;          // 最低 ADX
-   double box_sl_buf_atr;       // SL 箱外缓冲（ATR）
-   double box_tp_height_mult;   // TP = 箱高 × 倍数
-   double box_min_rr;           // 最低盈亏比
-   bool   box_use_htf;          // H1 同向确认
-   int    box_htf_fast;
-   int    box_htf_slow;
-   int    box_touch_min;        // 上下沿最少触及次数
    // 七条件引擎
    int    sc_ema_fast;          // 150
    int    sc_ema_slow;          // 510
@@ -278,8 +261,7 @@ string ModeToString(const ENUM_RUN_MODE m)
 
 string StratToString(const ENUM_STRATEGY_ENGINE e)
   {
-   if(e==STRAT_SEVEN_COND)   return "七条件";
-   if(e==STRAT_BOX_BREAKOUT) return "顺势箱体";
+   if(e==STRAT_SEVEN_COND) return "七条件";
    return "体制切换";
   }
 

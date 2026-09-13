@@ -2,7 +2,7 @@
 //| BoxBreakoutStrategy.mqh — 趋势内小箱体 · 仅顺势突破入场            |
 //| 上涨只做上破；下跌只做下破；破箱后等下一震荡再建箱                  |
 //+------------------------------------------------------------------+
-#property copyright "GoldFX Intraday Framework"
+#property copyright "GoldFX BoxBreakout"
 #property strict
 
 #ifndef GOLDFX_BOX_BREAKOUT_STRATEGY_MQH
@@ -187,14 +187,14 @@ public:
 
    string LastStatus(void) const { return m_last_status; }
 
-   bool Init(const string symbol, const ENUM_TIMEFRAMES tf, const SRuntimeParams &p)
+   bool Init(const string symbol, const ENUM_TIMEFRAMES tf, const SBoxParams &p)
      {
       m_symbol = symbol;
       m_tf     = tf;
       return Configure(p);
      }
 
-   bool Configure(const SRuntimeParams &p)
+   bool Configure(const SBoxParams &p)
      {
       Release();
       m_lookback       = MathMax(4, p.box_lookback);

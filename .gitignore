@@ -18,3 +18,5 @@ Thumbs.db
 
 *.zip
 GoldFX_MT5_*.zip
+# 允许独立箱体发布包
+!packages/GoldFX_BoxBreakout_*.zip

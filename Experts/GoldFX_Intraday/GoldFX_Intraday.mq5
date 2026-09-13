@@ -3,8 +3,8 @@
 //| 七条件入场 · 多品种组合 · 自适应风险 · Telegram · 仪表盘 · 持久化  |
 //+------------------------------------------------------------------+
 #property copyright "GoldFX Intraday Framework"
-#property version   "3.20"
-#property description "七条件/顺势箱体/体制切换 · 多品种 · 自适应风险"
+#property version   "3.10"
+#property description "七条件回调入场+ADX+结构止损 · 多品种 · 自适应风险"
 
 #include <GoldFX/Common.mqh>
 #include <GoldFX/Persistence.mqh>
@@ -70,23 +70,6 @@ input double               InpRsiOS          = 30;
 input double               InpRsiOB          = 70;
 input double               InpRangeSL        = 1.0;
 input double               InpRangeTP        = 1.2;
-
-input group "=== 顺势小箱体突破 ==="
-input int                  InpBoxLookback    = 8;      // 箱体回看根数
-input int                  InpBoxMinBars     = 5;      // 箱内最少收盘数
-input double               InpBoxWMinATR     = 0.35;   // 最小箱宽 ATR
-input double               InpBoxWMaxATR     = 1.20;   // 最大箱宽 ATR
-input double               InpBoxBreakBuf    = 0.05;   // 突破缓冲 ATR
-input int                  InpBoxEmaFast     = 50;
-input int                  InpBoxEmaSlow     = 200;
-input double               InpBoxMinADX      = 20.0;
-input double               InpBoxSLBufATR    = 0.10;   // SL 箱外缓冲 ATR
-input double               InpBoxTPHeight    = 2.0;    // TP = 箱高 ×
-input double               InpBoxMinRR       = 1.5;
-input bool                 InpBoxUseHTF      = true;
-input int                  InpBoxHtfFast     = 50;
-input int                  InpBoxHtfSlow     = 200;
-input int                  InpBoxTouchMin    = 1;      // 上下沿最少触及
 
 input group "=== 选择性与过滤器 ==="
 input int                  InpMinQuality     = 65;
@@ -174,19 +157,6 @@ bool ValidateInputs(string &err)
      { err="最小K线应 >= 慢EMA"; return false; }
    if(InpMaxPortfolio < 1 || InpMaxPosSym < 1)
      { err="持仓上限无效"; return false; }
-   if(InpStrategy == STRAT_BOX_BREAKOUT)
-     {
-      if(InpBoxLookback < 4 || InpBoxMinBars < 3 || InpBoxMinBars > InpBoxLookback)
-        { err="箱体回看/最少根数无效"; return false; }
-      if(InpBoxWMinATR <= 0 || InpBoxWMaxATR <= InpBoxWMinATR)
-        { err="箱宽 ATR 区间无效"; return false; }
-      if(InpBoxEmaFast < 2 || InpBoxEmaSlow <= InpBoxEmaFast)
-        { err="箱体趋势 EMA 无效"; return false; }
-      if(InpBoxMinRR < 1.0 || InpBoxTPHeight < 0.5)
-        { err="箱体 TP/RR 参数无效"; return false; }
-      if(InpBoxTouchMin < 1)
-        { err="箱沿触及次数无效"; return false; }
-     }
    return true;
   }
 
@@ -240,22 +210,6 @@ void BuildParams(SRuntimeParams &p)
    p.rsi_overbought = InpRsiOB;
    p.range_sl_atr_mult = InpRangeSL;
    p.range_tp_atr_mult = InpRangeTP;
-
-   p.box_lookback = InpBoxLookback;
-   p.box_min_bars = InpBoxMinBars;
-   p.box_width_min_atr = InpBoxWMinATR;
-   p.box_width_max_atr = InpBoxWMaxATR;
-   p.box_break_buf_atr = InpBoxBreakBuf;
-   p.box_ema_fast = InpBoxEmaFast;
-   p.box_ema_slow = InpBoxEmaSlow;
-   p.box_min_adx = InpBoxMinADX;
-   p.box_sl_buf_atr = InpBoxSLBufATR;
-   p.box_tp_height_mult = InpBoxTPHeight;
-   p.box_min_rr = InpBoxMinRR;
-   p.box_use_htf = InpBoxUseHTF;
-   p.box_htf_fast = InpBoxHtfFast;
-   p.box_htf_slow = InpBoxHtfSlow;
-   p.box_touch_min = InpBoxTouchMin;
 
    p.min_quality_score = InpMinQuality;
    p.max_trades_per_day = InpMaxTradesDay;
@@ -361,16 +315,8 @@ void RefreshUI(const string extra="")
                               g_params.max_open_portfolio, MoneyModeToString(g_params.money_mode));
    string sig = StringFormat("点差%.2f 模式=%s", CurrentSpreadPrice(_Symbol), ModeToString(g_params.run_mode));
 
-   string cond_line = SevenFlags(snap);
-   if(g_params.strategy_engine == STRAT_BOX_BREAKOUT)
-     {
-      string bs = g_portfolio.BoxStatus();
-      if(StringLen(bs)==0) bs = "箱体引擎待命";
-      cond_line = StringFormat("顺势箱体 | %s", bs);
-     }
-
-   Comment(acct,"\n",cond_line,"\n",risk,"\n",port,"\n",g_status);
-   g_dash.Update(acct, sig, cond_line, risk, filt, perf, port, g_status);
+   Comment(acct,"\n",SevenFlags(snap),"\n",risk,"\n",port,"\n",g_status);
+   g_dash.Update(acct, sig, SevenFlags(snap), risk, filt, perf, port, g_status);
   }
 
 //------------------------------------------------------------------

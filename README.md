@@ -15,7 +15,6 @@ GitHub：https://github.com/szgogol1/GoldFX-MT5
 参考 **SafeScalperPro / Prime** 的工程能力，在自有框架上实现：
 
 - **七条件缺一不可**入场（EMA 趋势/强度/价格位置/突破/RSI/动量/H1 确认）
-- **顺势小箱体突破**（趋势内建箱，只做顺势上/下破；动态 SL/TP；破后等下一震荡再建箱）
 - **黄金现货–期货基差均值回归套利**（Z 分双边对冲）
 - **无网格 · 无马丁 · 一次一笔/每品种一笔**
 - **自适应风险引擎**（回撤降仓、ATR 反比、滚动胜率调整）
@@ -26,21 +25,14 @@ GitHub：https://github.com/szgogol1/GoldFX-MT5
 
 > 非官方克隆。研究与模拟用途。实盘前请充分测试。
 
-## 顺势小箱体突破（`STRAT_BOX_BREAKOUT`）
+## 顺势箱体（独立包，不混入本仓库主 EA）
 
-趋势行情中在 K 线上识别「小箱体」震荡，**仅顺势**交易：
+箱体策略已拆成独立安装包，与七条件/基差套利分离：
 
-| 背景 | 入场 | 不做 |
-|------|------|------|
-| EMA50/200 + ADX/DI 多头（可选 H1 同向） | 收盘上破箱上沿 | 下破不做空，箱体作废重建 |
-| 空头同理 | 收盘下破箱下沿 | 上破不做多 |
+- 源码目录：`packages/GoldFX_BoxBreakout/`
+- 打包：`bash packages/GoldFX_BoxBreakout/scripts/make_zip.sh`
+- 本机解压 ZIP 后运行 `install_to_MT5.bat`，只安装箱体 EA
 
-- 箱宽限制在 `0.35–1.20 ATR`，需上下沿触及与足够箱内收盘  
-- 初始 SL：箱体对侧外沿；TP：箱高 × `InpBoxTPHeight`，并保证最低 RR  
-- 入场后由 `PositionManager` 保本/追踪/部分平仓做动态离场  
-- 破箱后标记重建，等价格进入**下一震荡箱**再寻突破  
-
-预设：`GoldFX_XAUUSD_M5_BoxBreakout.set`（`InpStrategy=2`）
 
 ## 黄金期货 / 现货基差套利（`GoldFX_BasisArb`）
 
@@ -97,16 +89,14 @@ Z_t = \frac{B_t - \mu_B}{\sigma_B}
 ## 目录
 
 ```
-Experts/GoldFX_Intraday/GoldFX_Intraday.mq5   # 日内：七条件 / 顺势箱体 / 体制
+Experts/GoldFX_Intraday/GoldFX_Intraday.mq5   # 日内七条件
 Experts/GoldFX_BasisArb/GoldFX_BasisArb.mq5   # 现货-期货基差套利
 Include/GoldFX/
   SevenConditionStrategy.mqh
-  BoxBreakoutStrategy.mqh      # 顺势小箱体突破
   BasisArbitrage.mqh           # 基差 Z 分引擎
   PortfolioEngine.mqh / AdaptiveRisk.mqh / ...
 Presets/
   GoldFX_XAUUSD_M5_SevenCond.set
-  GoldFX_XAUUSD_M5_BoxBreakout.set
   GoldFX_BasisArb_M15.set
   GoldFX_BasisArb_Conservative.set
   ...
@@ -129,7 +119,6 @@ Presets/
 | 离场 | `Phase3_Exit_Management.set` |
 | 时段 | `Phase4_Session_DayCap.set` |
 | 黄金即用 | `GoldFX_XAUUSD_M5_SevenCond.set` |
-| 顺势箱体 | `GoldFX_XAUUSD_M5_BoxBreakout.set`（`InpStrategy=2`） |
 | 多品种 | `GoldFX_Portfolio_Major.set`（`InpSymbols=XAUUSD,XAGUSD,...`） |
 | 基差套利 | `GoldFX_BasisArb_M15.set`（先改期货品种名） |
 | 基差保守 | `GoldFX_BasisArb_Conservative.set` |
