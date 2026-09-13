@@ -1,17 +1,16 @@
 //+------------------------------------------------------------------+
-//| GoldFX_BoxBreakout.mq5 — 顺势小箱体突破（独立包）                   |
-//| 与 GoldFX_Intraday 完全分离，单独编译、单独安装                    |
+//| GoldFX_BoxBreakout.mq5 — standalone with-trend box breakout EA   |
 //+------------------------------------------------------------------+
 #property copyright "GoldFX BoxBreakout"
-#property version   "1.00"
-#property description "顺势小箱体突破独立 EA（上涨只做上破，下跌只做下破）"
+#property version   "1.01"
+#property description "Standalone with-trend small-box breakout EA"
 
 #include <GoldFX_Box/Common.mqh>
 #include <GoldFX_Box/BoxBreakoutStrategy.mqh>
 #include <GoldFX_Box/PositionTrail.mqh>
 #include <Trade\Trade.mqh>
 
-input group "=== 运行 ==="
+input group "=== Runtime ==="
 input bool   InpAllowTrade   = true;
 input int    InpMagic        = 20260913;
 input int    InpSlippage     = 30;
@@ -21,7 +20,7 @@ input int    InpMaxTradesDay = 3;
 input int    InpCooldownBars = 4;
 input double InpMaxSpread    = 0.50;
 
-input group "=== 箱体 ==="
+input group "=== Box ==="
 input int    InpBoxLookback  = 8;
 input int    InpBoxMinBars   = 5;
 input double InpBoxWMinATR   = 0.35;
@@ -40,19 +39,19 @@ input int    InpBoxTouchMin  = 1;
 input int    InpATRPeriod    = 14;
 input int    InpADXPeriod    = 14;
 
-input group "=== 资金 ==="
+input group "=== Money ==="
 input bool   InpUseRiskPct   = true;
 input double InpRiskPct      = 0.75;
 input double InpFixedLot     = 0.01;
 
-input group "=== 时段 ==="
+input group "=== Session ==="
 input bool   InpUseSession   = true;
 input int    InpSessStart    = 8;
 input int    InpSessEnd      = 20;
 input bool   InpFridayCut    = true;
 input int    InpFridayHour   = 16;
 
-input group "=== 动态离场 ==="
+input group "=== Exit ==="
 input bool   InpBE           = true;
 input double InpBETrig       = 1.0;
 input double InpBELock       = 0.10;
@@ -77,15 +76,15 @@ bool ValidateInputs(string &err)
   {
    err = "";
    if(InpBoxLookback < 4 || InpBoxMinBars < 3 || InpBoxMinBars > InpBoxLookback)
-     { err="箱体回看/最少根数无效"; return false; }
+     { err = "invalid box lookback/min bars"; return false; }
    if(InpBoxWMinATR <= 0.0 || InpBoxWMaxATR <= InpBoxWMinATR)
-     { err="箱宽 ATR 区间无效"; return false; }
+     { err = "invalid box width ATR range"; return false; }
    if(InpBoxEmaFast < 2 || InpBoxEmaSlow <= InpBoxEmaFast)
-     { err="趋势 EMA 无效"; return false; }
+     { err = "invalid trend EMA"; return false; }
    if(InpBoxMinRR < 1.0 || InpBoxTPHeight < 0.5)
-     { err="TP/RR 无效"; return false; }
+     { err = "invalid TP/RR"; return false; }
    if(InpFixedLot <= 0.0)
-     { err="固定手数无效"; return false; }
+     { err = "invalid fixed lot"; return false; }
    return true;
   }
 
@@ -94,38 +93,40 @@ void FillBoxParams(SBoxParams &p)
    ZeroMemory(p);
    p.atr_period = InpATRPeriod;
    p.adx_period = InpADXPeriod;
-   p.box_lookback = InpBoxLookback;
-   p.box_min_bars = InpBoxMinBars;
-   p.box_width_min_atr = InpBoxWMinATR;
-   p.box_width_max_atr = InpBoxWMaxATR;
-   p.box_break_buf_atr = InpBoxBreakBuf;
-   p.box_ema_fast = InpBoxEmaFast;
-   p.box_ema_slow = InpBoxEmaSlow;
-   p.box_min_adx = InpBoxMinADX;
-   p.box_sl_buf_atr = InpBoxSLBufATR;
-   p.box_tp_height_mult = InpBoxTPHeight;
-   p.box_min_rr = InpBoxMinRR;
-   p.box_use_htf = InpBoxUseHTF;
-   p.box_htf_fast = InpBoxHtfFast;
-   p.box_htf_slow = InpBoxHtfSlow;
-   p.box_touch_min = InpBoxTouchMin;
+   p.lookback = InpBoxLookback;
+   p.min_bars = InpBoxMinBars;
+   p.width_min_atr = InpBoxWMinATR;
+   p.width_max_atr = InpBoxWMaxATR;
+   p.break_buf_atr = InpBoxBreakBuf;
+   p.ema_fast = InpBoxEmaFast;
+   p.ema_slow = InpBoxEmaSlow;
+   p.min_adx = InpBoxMinADX;
+   p.sl_buf_atr = InpBoxSLBufATR;
+   p.tp_height_mult = InpBoxTPHeight;
+   p.min_rr = InpBoxMinRR;
+   p.use_htf = InpBoxUseHTF;
+   p.htf_fast = InpBoxHtfFast;
+   p.htf_slow = InpBoxHtfSlow;
+   p.touch_min = InpBoxTouchMin;
   }
 
 bool SessionOK(string &why)
   {
    MqlDateTime dt;
    TimeToStruct(TimeCurrent(), dt);
-   if(InpFridayCut && dt.day_of_week==5 && dt.hour>=InpFridayHour)
-     { why="周五截止"; return false; }
-   if(!InpUseSession) return true;
-   if(InpSessStart==InpSessEnd) return true;
+   if(InpFridayCut && dt.day_of_week == 5 && dt.hour >= InpFridayHour)
+     { why = "Friday cutoff"; return false; }
+   if(!InpUseSession)
+      return true;
+   if(InpSessStart == InpSessEnd)
+      return true;
    if(InpSessStart < InpSessEnd)
      {
       if(dt.hour < InpSessStart || dt.hour >= InpSessEnd)
-        { why="非交易时段"; return false; }
+        { why = "outside session"; return false; }
      }
    else if(dt.hour < InpSessStart && dt.hour >= InpSessEnd)
-     { why="非交易时段"; return false; }
+     { why = "outside session"; return false; }
    return true;
   }
 
@@ -133,7 +134,7 @@ void ResetDayIfNeeded(void)
   {
    MqlDateTime dt;
    TimeToStruct(TimeCurrent(), dt);
-   const int stamp = dt.year*10000 + dt.mon*100 + dt.day;
+   const int stamp = dt.year * 10000 + dt.mon * 100 + dt.day;
    if(stamp != g_day_stamp)
      {
       g_day_stamp = stamp;
@@ -143,72 +144,79 @@ void ResetDayIfNeeded(void)
 
 double CalcLot(const double entry, const double sl)
   {
-   if(!InpUseRiskPct || InpRiskPct<=0.0)
+   if(!InpUseRiskPct || InpRiskPct <= 0.0)
       return NormalizeDouble(InpFixedLot, 2);
 
    const double tick_val = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_VALUE);
    const double tick_sz  = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_SIZE);
-   if(tick_val<=0.0 || tick_sz<=0.0) return InpFixedLot;
-   const double risk_money = AccountInfoDouble(ACCOUNT_EQUITY)*(InpRiskPct/100.0);
-   const double dist = MathAbs(entry-sl);
-   if(dist<=0.0) return InpFixedLot;
-   double lot = risk_money / (dist/tick_sz*tick_val);
+   if(tick_val <= 0.0 || tick_sz <= 0.0)
+      return InpFixedLot;
+
+   const double risk_money = AccountInfoDouble(ACCOUNT_EQUITY) * (InpRiskPct / 100.0);
+   const double dist = MathAbs(entry - sl);
+   if(dist <= 0.0)
+      return InpFixedLot;
+
+   double lot = risk_money / (dist / tick_sz * tick_val);
    double vmin = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN);
    double vmax = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MAX);
-   double vstep= SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP);
-   if(vstep<=0.0) vstep=0.01;
-   lot = MathFloor(lot/vstep)*vstep;
+   double vstep = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP);
+   if(vstep <= 0.0) vstep = 0.01;
+   lot = MathFloor(lot / vstep) * vstep;
    lot = MathMax(vmin, MathMin(vmax, lot));
    return NormalizeDouble(lot, 2);
   }
 
-bool OpenSignal(const SSignalResult &sig, string &msg)
+bool OpenSignal(const SBoxSignal &sig, string &msg)
   {
-   if(sig.signal==SIGNAL_NONE){ msg="无信号"; return false; }
-   if(sig.sl<=0.0){ msg="无止损"; return false; }
+   if(sig.signal == BOX_SIGNAL_NONE)
+     { msg = "no signal"; return false; }
+   if(sig.sl <= 0.0)
+     { msg = "no SL"; return false; }
    if(sig.quality < InpMinQuality)
-     { msg=StringFormat("质量不足 Q=%d", sig.quality); return false; }
-   if(CurrentSpreadPrice(_Symbol) > InpMaxSpread)
-     { msg="点差过大"; return false; }
+     { msg = StringFormat("quality low Q=%d", sig.quality); return false; }
+   if(BoxSpreadPrice(_Symbol) > InpMaxSpread)
+     { msg = "spread too wide"; return false; }
    if(g_trail.CountMine(_Symbol) > 0)
-     { msg="已有持仓"; return false; }
+     { msg = "already in position"; return false; }
    if(g_day_trades >= InpMaxTradesDay)
-     { msg="日笔数上限"; return false; }
+     { msg = "day trade cap"; return false; }
 
    const double lot = CalcLot(sig.entry, sig.sl);
-   if(lot<=0.0){ msg="手数无效"; return false; }
+   if(lot <= 0.0)
+     { msg = "invalid lot"; return false; }
 
    g_trade.SetExpertMagicNumber(InpMagic);
    g_trade.SetDeviationInPoints(InpSlippage);
    g_trade.SetTypeFillingBySymbol(_Symbol);
 
    const string cmt = StringFormat("BOX Q%d", sig.quality);
-   bool ok=false;
-   if(sig.signal==SIGNAL_BUY)
-      ok=g_trade.Buy(lot, _Symbol, 0.0, sig.sl, sig.tp, cmt);
+   bool ok = false;
+   if(sig.signal == BOX_SIGNAL_BUY)
+      ok = g_trade.Buy(lot, _Symbol, 0.0, sig.sl, sig.tp, cmt);
    else
-      ok=g_trade.Sell(lot, _Symbol, 0.0, sig.sl, sig.tp, cmt);
+      ok = g_trade.Sell(lot, _Symbol, 0.0, sig.sl, sig.tp, cmt);
 
    if(!ok)
      {
-      msg=StringFormat("下单失败 %d", g_trade.ResultRetcode());
+      msg = StringFormat("order failed %d", g_trade.ResultRetcode());
       return false;
      }
 
    g_day_trades++;
    g_cooldown_until = iTime(_Symbol, PERIOD_CURRENT, 0)
-                      + (datetime)(PeriodSeconds(PERIOD_CURRENT)*InpCooldownBars);
-   msg=StringFormat("开仓 %s lot=%.2f SL=%.2f TP=%.2f | %s",
-                    SignalToString(sig.signal), lot, sig.sl, sig.tp, sig.reason);
+                      + (datetime)(PeriodSeconds(PERIOD_CURRENT) * InpCooldownBars);
+   msg = StringFormat("opened %s lot=%.2f SL=%.2f TP=%.2f | %s",
+                      BoxSignalText(sig.signal), lot, sig.sl, sig.tp, sig.reason);
    return true;
   }
 
 void RefreshUI(void)
   {
    Comment(StringFormat(
-      "GoldFX BoxBreakout（独立包）\n状态: %s\n点差 %.2f | 今日 %d/%d | 持仓 %d\n%s",
+      "GoldFX BoxBreakout (standalone)\nstatus: %s\nspread %.2f | day %d/%d | pos %d\n%s",
       g_box.LastStatus(),
-      CurrentSpreadPrice(_Symbol),
+      BoxSpreadPrice(_Symbol),
       g_day_trades, InpMaxTradesDay,
       g_trail.CountMine(_Symbol),
       g_status));
@@ -223,7 +231,7 @@ int OnInit()
       return INIT_PARAMETERS_INCORRECT;
      }
    if(Bars(_Symbol, PERIOD_CURRENT) < InpMinBars)
-      PrintFormat("警告: 当前K线 %d < 建议最小 %d",
+      PrintFormat("warning: bars %d < suggested %d",
                   Bars(_Symbol, PERIOD_CURRENT), InpMinBars);
 
    SBoxParams bp;
@@ -237,7 +245,7 @@ int OnInit()
                      InpPartial, InpPartialATR, InpPartialPct,
                      InpMaxHoldMin);
 
-   g_status="顺势箱体独立包已启动";
+   g_status = "standalone box EA started";
    RefreshUI();
    return INIT_SUCCEEDED;
   }
@@ -255,7 +263,7 @@ void OnTick()
       g_trail.Manage();
 
    const datetime bar = iTime(_Symbol, PERIOD_CURRENT, 0);
-   if(bar==0 || bar==g_last_bar)
+   if(bar == 0 || bar == g_last_bar)
      {
       RefreshUI();
       return;
@@ -264,7 +272,7 @@ void OnTick()
 
    if(!InpAllowTrade)
      {
-      g_status="交易关闭";
+      g_status = "trading disabled";
       RefreshUI();
       return;
      }
@@ -272,27 +280,27 @@ void OnTick()
    string why;
    if(!SessionOK(why))
      {
-      g_status=why;
+      g_status = why;
       RefreshUI();
       return;
      }
 
    if(bar < g_cooldown_until)
      {
-      g_status="冷却中";
+      g_status = "cooldown";
       RefreshUI();
       return;
      }
 
-   SSignalResult sig = g_box.Evaluate();
-   if(sig.signal != SIGNAL_NONE)
+   SBoxSignal sig = g_box.Evaluate();
+   if(sig.signal != BOX_SIGNAL_NONE)
      {
       string msg;
       OpenSignal(sig, msg);
-      g_status=msg;
+      g_status = msg;
      }
    else
-      g_status=g_box.LastStatus();
+      g_status = g_box.LastStatus();
 
    RefreshUI();
   }

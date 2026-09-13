@@ -1,4 +1,4 @@
-; GoldFX BoxBreakout — 独立包预设（XAUUSD M5）
+; GoldFX BoxBreakout standalone preset (XAUUSD M5)
 InpAllowTrade=true
 InpMagic=20260913
 InpSlippage=30

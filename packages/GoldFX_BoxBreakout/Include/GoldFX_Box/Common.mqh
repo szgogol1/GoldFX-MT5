@@ -1,89 +1,84 @@
 //+------------------------------------------------------------------+
-//| Common.mqh — 顺势箱体独立包共享类型                                |
+//| Common.mqh — GoldFX BoxBreakout shared types                     |
 //+------------------------------------------------------------------+
-#property copyright "GoldFX BoxBreakout"
-#property strict
-
 #ifndef GOLDFX_BOX_COMMON_MQH
 #define GOLDFX_BOX_COMMON_MQH
 
-enum ENUM_SIGNAL { SIGNAL_NONE=0, SIGNAL_BUY=1, SIGNAL_SELL=-1 };
-
-struct SSignalResult
+enum ENUM_BOX_SIGNAL
   {
-   ENUM_SIGNAL signal;
-   string      symbol;
-   double      entry;
-   double      sl;
-   double      tp;
-   double      atr;
-   int         quality;
-   string      reason;
+   BOX_SIGNAL_NONE = 0,
+   BOX_SIGNAL_BUY  = 1,
+   BOX_SIGNAL_SELL = -1
+  };
+
+struct SBoxSignal
+  {
+   ENUM_BOX_SIGNAL signal;
+   string          symbol;
+   double          entry;
+   double          sl;
+   double          tp;
+   double          atr;
+   int             quality;
+   string          reason;
   };
 
 struct SBoxParams
   {
    int    atr_period;
    int    adx_period;
-   int    box_lookback;
-   int    box_min_bars;
-   double box_width_min_atr;
-   double box_width_max_atr;
-   double box_break_buf_atr;
-   int    box_ema_fast;
-   int    box_ema_slow;
-   double box_min_adx;
-   double box_sl_buf_atr;
-   double box_tp_height_mult;
-   double box_min_rr;
-   bool   box_use_htf;
-   int    box_htf_fast;
-   int    box_htf_slow;
-   int    box_touch_min;
+   int    lookback;
+   int    min_bars;
+   double width_min_atr;
+   double width_max_atr;
+   double break_buf_atr;
+   int    ema_fast;
+   int    ema_slow;
+   double min_adx;
+   double sl_buf_atr;
+   double tp_height_mult;
+   double min_rr;
+   bool   use_htf;
+   int    htf_fast;
+   int    htf_slow;
+   int    touch_min;
   };
 
-double SafeDiv(const double a, const double b, const double fallback=0.0)
+void BoxSignalClear(SBoxSignal &s)
   {
-   if(MathAbs(b) < DBL_EPSILON) return fallback;
-   return a / b;
+   s.signal  = BOX_SIGNAL_NONE;
+   s.symbol  = "";
+   s.entry   = 0.0;
+   s.sl      = 0.0;
+   s.tp      = 0.0;
+   s.atr     = 0.0;
+   s.quality = 0;
+   s.reason  = "";
   }
 
-int SymbolDigitsOf(const string sym="")
+string BoxSignalText(const ENUM_BOX_SIGNAL s)
   {
-   const string s = (sym=="" ? _Symbol : sym);
-   return (int)SymbolInfoInteger(s, SYMBOL_DIGITS);
-  }
-
-double NormalizePriceSym(const double price, const string sym="")
-  {
-   return NormalizeDouble(price, SymbolDigitsOf(sym));
-  }
-
-double CurrentSpreadPrice(const string symbol)
-  {
-   MqlTick t;
-   if(!SymbolInfoTick(symbol, t)) return 999999.0;
-   return (t.ask - t.bid);
-  }
-
-void InitSignal(SSignalResult &r)
-  {
-   r.signal=SIGNAL_NONE;
-   r.symbol="";
-   r.entry=0.0;
-   r.sl=0.0;
-   r.tp=0.0;
-   r.atr=0.0;
-   r.quality=0;
-   r.reason="";
-  }
-
-string SignalToString(const ENUM_SIGNAL s)
-  {
-   if(s==SIGNAL_BUY) return "BUY";
-   if(s==SIGNAL_SELL) return "SELL";
+   if(s == BOX_SIGNAL_BUY)  return "BUY";
+   if(s == BOX_SIGNAL_SELL) return "SELL";
    return "NONE";
   }
 
+int BoxDigits(const string sym)
+  {
+   return (int)SymbolInfoInteger(sym, SYMBOL_DIGITS);
+  }
+
+double BoxNormPrice(const double price, const string sym)
+  {
+   return NormalizeDouble(price, BoxDigits(sym));
+  }
+
+double BoxSpreadPrice(const string sym)
+  {
+   MqlTick t;
+   if(!SymbolInfoTick(sym, t))
+      return 999999.0;
+   return (t.ask - t.bid);
+  }
+
 #endif
-//+------------------------------------------------------------------+
