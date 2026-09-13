@@ -1,4 +1,4 @@
-# GoldFX Intraday v3 — 七条件 + 组合基础设施
+# GoldFX Intraday v3.2 — 多引擎日内框架
 
 ## Windows 安装
 
@@ -14,24 +14,35 @@ GitHub：https://github.com/szgogol1/GoldFX-MT5
 
 参考 **SafeScalperPro / Prime** 的工程能力，在自有框架上实现：
 
-- **七条件缺一不可**入场（EMA 趋势/强度/价格位置/突破/RSI/动量/H1 确认）
-- **黄金现货–期货基差均值回归套利**（Z 分双边对冲）
+- **可切换策略引擎**（`InpStrategy`，一次只跑一种）：七条件 / 体制自动 / 趋势 / 震荡 / 顺势小箱体突破
+- **共用**风控、仓位管理、时段/新闻/周五过滤、自适应风险、仪表盘、Telegram
+- **黄金现货–期货基差均值回归套利**（独立 EA `GoldFX_BasisArb`，不混入 Intraday）
 - **无网格 · 无马丁 · 一次一笔/每品种一笔**
-- **自适应风险引擎**（回撤降仓、ATR 反比、滚动胜率调整）
 - **单图多品种**（最多 8，CSV 配置）+ **相关性保护**
-- **Telegram** 推送与 `/status /stop /resume /risk`（原生 WebRequest，无 DLL）
-- **Forge 仪表盘**（回测自动禁用）
-- **峰值回撤持久化**、交易 CSV 日志、新闻/周五/时段过滤
 
 > 非官方克隆。研究与模拟用途。实盘前请充分测试。
 
-## 顺势箱体（独立包，不混入本仓库主 EA）
+## 策略引擎切换（GoldFX_Intraday）
 
-箱体策略已拆成独立安装包，与七条件/基差套利分离：
+| `InpStrategy` | 引擎 | 预设 |
+|---------------|------|------|
+| 0 `STRAT_SEVEN_COND` | 七条件 | `Presets/GoldFX_XAUUSD_M5_SevenCond.set` |
+| 1 `STRAT_REGIME_AUTO` | 趋势/震荡体制自动 | （可用趋势/震荡参数组） |
+| 2 `STRAT_TREND_ONLY` | 仅趋势 | `Presets/GoldFX_XAUUSD_M5_Trend.set` |
+| 3 `STRAT_RANGE_ONLY` | 仅震荡 | `Presets/GoldFX_XAUUSD_M5_Range.set` |
+| 4 `STRAT_BOX_BREAKOUT` | 顺势小箱体突破 | `Presets/GoldFX_XAUUSD_M5_BoxBreakout.set` |
+
+各策略参数在 EA 输入里按组分开；加载对应 `.set` 即可。**基差套利请用 `GoldFX_BasisArb`，不要与本 EA 混挂。**
+
+## 顺势箱体独立包（仍保留）
+
+`packages/GoldFX_BoxBreakout/` 可单独安装，不依赖 Intraday 其它引擎：
 
 - 源码目录：`packages/GoldFX_BoxBreakout/`
 - 打包：`bash packages/GoldFX_BoxBreakout/scripts/make_zip.sh`
 - 本机解压 ZIP 后运行 `install_to_MT5.bat`，只安装箱体 EA
+
+Intraday 内的箱体引擎与独立包逻辑一致，但共享主框架的风控/过滤器。
 
 
 ## 黄金期货 / 现货基差套利（`GoldFX_BasisArb`）
@@ -89,25 +100,30 @@ Z_t = \frac{B_t - \mu_B}{\sigma_B}
 ## 目录
 
 ```
-Experts/GoldFX_Intraday/GoldFX_Intraday.mq5   # 日内七条件
-Experts/GoldFX_BasisArb/GoldFX_BasisArb.mq5   # 现货-期货基差套利
+Experts/GoldFX_Intraday/GoldFX_Intraday.mq5   # 日内多引擎（不含基差）
+Experts/GoldFX_BasisArb/GoldFX_BasisArb.mq5   # 现货-期货基差套利（独立）
+packages/GoldFX_BoxBreakout/                  # 顺势箱体独立安装包
 Include/GoldFX/
   SevenConditionStrategy.mqh
-  BasisArbitrage.mqh           # 基差 Z 分引擎
+  TrendStrategy.mqh / RangeStrategy.mqh
+  BoxBreakoutStrategy.mqh
   PortfolioEngine.mqh / AdaptiveRisk.mqh / ...
+  BasisArbitrage.mqh                          # 仅供 BasisArb EA
 Presets/
   GoldFX_XAUUSD_M5_SevenCond.set
-  GoldFX_BasisArb_M15.set
-  GoldFX_BasisArb_Conservative.set
+  GoldFX_XAUUSD_M5_Trend.set
+  GoldFX_XAUUSD_M5_Range.set
+  GoldFX_XAUUSD_M5_BoxBreakout.set
+  GoldFX_BasisArb_*.set
   ...
 ```
 
 ## 安装
 
 1. 复制到 MT5 `MQL5/Experts` 与 `MQL5/Include/GoldFX`、`MQL5/Presets`  
-2. MetaEditor **F7** 编译两个 EA  
-3. 日内策略：挂 **XAUUSD M5**（推荐伦敦–纽约）  
-4. 基差套利：挂现货图，填好期货品种名  
+2. MetaEditor **F7** 编译 `GoldFX_Intraday`（基差另编 `GoldFX_BasisArb`）  
+3. 日内策略：挂 **XAUUSD M5**，用 `InpStrategy` 或对应 `.set` 选引擎  
+4. 基差套利：挂现货图，填好期货品种名（独立 EA）  
 5. Telegram：工具 → 选项 → 专家 → 允许 `https://api.telegram.org`
 
 ## 推荐起步

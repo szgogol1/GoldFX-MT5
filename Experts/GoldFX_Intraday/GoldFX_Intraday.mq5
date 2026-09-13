@@ -1,10 +1,10 @@
 //+------------------------------------------------------------------+
-//| GoldFX_Intraday.mq5 — v3 SafeScalper/Prime 能力整合版              |
-//| 七条件入场 · 多品种组合 · 自适应风险 · Telegram · 仪表盘 · 持久化  |
+//| GoldFX_Intraday.mq5 — v3.2 多引擎（一次只跑一种）                  |
+//| 七条件 / 趋势 / 震荡 / 顺势小箱体 · 共用风控仓位时段 · 不含基差套利 |
 //+------------------------------------------------------------------+
 #property copyright "GoldFX Intraday Framework"
-#property version   "3.10"
-#property description "七条件回调入场+ADX+结构止损 · 多品种 · 自适应风险"
+#property version   "3.20"
+#property description "可切换引擎:七条件/趋势/震荡/顺势箱体 · 共用风控 · 不含基差"
 
 #include <GoldFX/Common.mqh>
 #include <GoldFX/Persistence.mqh>
@@ -57,7 +57,7 @@ input double               InpScMinRR        = 1.8;
 input double               InpScSLATRMax     = 1.8;
 input int                  InpATRPeriod      = 14;
 
-input group "=== 体制引擎备用参数 ==="
+input group "=== 趋势策略（STRAT_TREND_ONLY / 体制自动）==="
 input int                  InpADXPeriod      = 14;
 input double               InpADXTrend       = 25;
 input double               InpADXRange       = 20;
@@ -66,10 +66,29 @@ input int                  InpMAFast         = 20;
 input int                  InpMASlow         = 50;
 input double               InpTrendSL        = 1.5;
 input double               InpTrendTP        = 2.5;
+
+input group "=== 震荡策略（STRAT_RANGE_ONLY / 体制自动）==="
 input double               InpRsiOS          = 30;
 input double               InpRsiOB          = 70;
 input double               InpRangeSL        = 1.0;
 input double               InpRangeTP        = 1.2;
+
+input group "=== 顺势小箱体突破（STRAT_BOX_BREAKOUT）==="
+input int                  InpBoxLookback    = 8;      // 建箱回看K线
+input int                  InpBoxMinBars     = 5;      // 箱内最少K线
+input double               InpBoxWMinATR     = 0.35;   // 箱宽最小ATR
+input double               InpBoxWMaxATR     = 1.20;   // 箱宽最大ATR
+input double               InpBoxBreakBuf    = 0.05;   // 突破缓冲ATR
+input int                  InpBoxEmaFast     = 50;
+input int                  InpBoxEmaSlow     = 200;
+input double               InpBoxMinADX      = 20.0;
+input double               InpBoxSLBufATR    = 0.10;   // 止损箱外缓冲
+input double               InpBoxTPHeight    = 2.0;    // 止盈=箱高倍数
+input double               InpBoxMinRR       = 1.5;
+input bool                 InpBoxUseHTF      = true;
+input int                  InpBoxHtfFast     = 50;
+input int                  InpBoxHtfSlow     = 200;
+input int                  InpBoxTouchMin    = 1;      // 上下沿最少触及
 
 input group "=== 选择性与过滤器 ==="
 input int                  InpMinQuality     = 65;
@@ -139,24 +158,57 @@ datetime             g_last_ui = 0;
 bool ValidateInputs(string &err)
   {
    err = "";
-   if(InpScEmaFast < 2 || InpScEmaSlow <= InpScEmaFast)
-     { err="七条件 EMA 周期无效"; return false; }
-   if(InpScMinGapATR <= 0 || InpScBreakBars < 3)
-     { err="突破/间距参数无效"; return false; }
-   if(InpScMinRR < 1.0 || InpScMinRR > 5.0)
-     { err="最低盈亏比需在 [1,5]"; return false; }
-   if(InpScMinADX < 10.0 || InpScMaxExtATR < 0.3)
-     { err="ADX/延伸参数无效"; return false; }
-   if(InpScRsiLLo >= InpScRsiLHi || InpScRsiSLo >= InpScRsiSHi)
-     { err="RSI 区间无效"; return false; }
    if(InpRiskPct <= 0 || InpRiskPct > 10)
      { err="风险% 需在 (0,10]"; return false; }
    if(InpMaxEqDD < 1)
      { err="最大回撤% 过小"; return false; }
-   if(InpMinBars < InpScEmaSlow)
-     { err="最小K线应 >= 慢EMA"; return false; }
    if(InpMaxPortfolio < 1 || InpMaxPosSym < 1)
      { err="持仓上限无效"; return false; }
+
+   if(InpStrategy == STRAT_SEVEN_COND)
+     {
+      if(InpScEmaFast < 2 || InpScEmaSlow <= InpScEmaFast)
+        { err="七条件 EMA 周期无效"; return false; }
+      if(InpScMinGapATR <= 0 || InpScBreakBars < 3)
+        { err="突破/间距参数无效"; return false; }
+      if(InpScMinRR < 1.0 || InpScMinRR > 5.0)
+        { err="最低盈亏比需在 [1,5]"; return false; }
+      if(InpScMinADX < 10.0 || InpScMaxExtATR < 0.3)
+        { err="ADX/延伸参数无效"; return false; }
+      if(InpScRsiLLo >= InpScRsiLHi || InpScRsiSLo >= InpScRsiSHi)
+        { err="RSI 区间无效"; return false; }
+      if(InpMinBars < InpScEmaSlow)
+        { err="最小K线应 >= 慢EMA"; return false; }
+     }
+   else if(InpStrategy == STRAT_TREND_ONLY || InpStrategy == STRAT_REGIME_AUTO)
+     {
+      if(InpMAFast < 2 || InpMASlow <= InpMAFast)
+        { err="趋势 EMA 周期无效"; return false; }
+      if(InpTrendSL <= 0 || InpTrendTP <= 0)
+        { err="趋势 SL/TP 无效"; return false; }
+      if(InpMinBars < InpMASlow + 50)
+        { err="最小K线不足以跑趋势引擎"; return false; }
+     }
+   else if(InpStrategy == STRAT_RANGE_ONLY)
+     {
+      if(InpRsiOS >= InpRsiOB)
+        { err="震荡 RSI 区间无效"; return false; }
+      if(InpRangeSL <= 0 || InpRangeTP <= 0)
+        { err="震荡 SL/TP 无效"; return false; }
+     }
+   else if(InpStrategy == STRAT_BOX_BREAKOUT)
+     {
+      if(InpBoxLookback < 4 || InpBoxMinBars < 3 || InpBoxMinBars > InpBoxLookback)
+        { err="箱体 lookback/minBars 无效"; return false; }
+      if(InpBoxWMinATR <= 0 || InpBoxWMaxATR <= InpBoxWMinATR)
+        { err="箱宽 ATR 区间无效"; return false; }
+      if(InpBoxEmaFast < 2 || InpBoxEmaSlow <= InpBoxEmaFast)
+        { err="箱体 EMA 周期无效"; return false; }
+      if(InpBoxMinRR < 1.0 || InpBoxTPHeight < 0.5)
+        { err="箱体 RR/止盈倍数无效"; return false; }
+      if(InpMinBars < InpBoxEmaSlow + 20)
+        { err="最小K线应 >= 箱体慢EMA+20"; return false; }
+     }
    return true;
   }
 
@@ -210,6 +262,22 @@ void BuildParams(SRuntimeParams &p)
    p.rsi_overbought = InpRsiOB;
    p.range_sl_atr_mult = InpRangeSL;
    p.range_tp_atr_mult = InpRangeTP;
+
+   p.box_lookback = InpBoxLookback;
+   p.box_min_bars = InpBoxMinBars;
+   p.box_width_min_atr = InpBoxWMinATR;
+   p.box_width_max_atr = InpBoxWMaxATR;
+   p.box_break_buf_atr = InpBoxBreakBuf;
+   p.box_ema_fast = InpBoxEmaFast;
+   p.box_ema_slow = InpBoxEmaSlow;
+   p.box_min_adx = InpBoxMinADX;
+   p.box_sl_buf_atr = InpBoxSLBufATR;
+   p.box_tp_height_mult = InpBoxTPHeight;
+   p.box_min_rr = InpBoxMinRR;
+   p.box_use_htf = InpBoxUseHTF;
+   p.box_htf_fast = InpBoxHtfFast;
+   p.box_htf_slow = InpBoxHtfSlow;
+   p.box_touch_min = InpBoxTouchMin;
 
    p.min_quality_score = InpMinQuality;
    p.max_trades_per_day = InpMaxTradesDay;
@@ -291,10 +359,28 @@ string SevenFlags(const SSevenCondSnapshot &s)
   }
 
 //------------------------------------------------------------------
+string EngineStatusLine(void)
+  {
+   if(g_params.strategy_engine == STRAT_SEVEN_COND)
+      return SevenFlags(g_portfolio.DashSnapshot());
+   if(g_params.strategy_engine == STRAT_BOX_BREAKOUT)
+     {
+      string box = g_portfolio.BoxStatus();
+      if(StringLen(box)==0) box = "箱体引擎待命";
+      return StringFormat("顺势箱体 | %s", box);
+     }
+   if(g_params.strategy_engine == STRAT_TREND_ONLY)
+      return "引擎=仅趋势（EMA/ADX）";
+   if(g_params.strategy_engine == STRAT_RANGE_ONLY)
+      return "引擎=仅震荡（RSI/布林带宽）";
+   return "引擎=体制自动（趋势↔震荡）";
+  }
+
+//------------------------------------------------------------------
 void RefreshUI(const string extra="")
   {
    if(StringLen(extra)>0) g_status = extra;
-   const SSevenCondSnapshot snap = g_portfolio.DashSnapshot();
+   string eng = EngineStatusLine();
    string acct = StringFormat("净值%.2f 余额%.2f 日盈亏%.2f%%",
                               AccountInfoDouble(ACCOUNT_EQUITY),
                               AccountInfoDouble(ACCOUNT_BALANCE),
@@ -315,8 +401,8 @@ void RefreshUI(const string extra="")
                               g_params.max_open_portfolio, MoneyModeToString(g_params.money_mode));
    string sig = StringFormat("点差%.2f 模式=%s", CurrentSpreadPrice(_Symbol), ModeToString(g_params.run_mode));
 
-   Comment(acct,"\n",SevenFlags(snap),"\n",risk,"\n",port,"\n",g_status);
-   g_dash.Update(acct, sig, SevenFlags(snap), risk, filt, perf, port, g_status);
+   Comment(acct,"\n",eng,"\n",risk,"\n",port,"\n",g_status);
+   g_dash.Update(acct, sig, eng, risk, filt, perf, port, g_status);
   }
 
 //------------------------------------------------------------------
@@ -341,7 +427,16 @@ void ProcessSignals(void)
    const int n = g_portfolio.ScanNewBars(sigs, g_params.run_mode);
    if(n <= 0)
      {
-      g_status = "等待回调+ADX条件 / 新K线";
+      if(g_params.strategy_engine == STRAT_BOX_BREAKOUT)
+         g_status = (StringLen(g_portfolio.BoxStatus())>0)? g_portfolio.BoxStatus() : "等待箱体突破 / 新K线";
+      else if(g_params.strategy_engine == STRAT_TREND_ONLY)
+         g_status = "等待趋势信号 / 新K线";
+      else if(g_params.strategy_engine == STRAT_RANGE_ONLY)
+         g_status = "等待震荡信号 / 新K线";
+      else if(g_params.strategy_engine == STRAT_REGIME_AUTO)
+         g_status = "等待体制信号 / 新K线";
+      else
+         g_status = "等待回调+ADX条件 / 新K线";
       return;
      }
 
@@ -423,11 +518,12 @@ int OnInit()
 
    g_dash.Create(ChartID(), g_params);
    EventSetTimer(15);
-   RefreshUI("v3.1 回调优化已启动");
+   RefreshUI(StringFormat("v3.2 引擎=%s 已启动", StratToString(g_params.strategy_engine)));
    if(g_tg.Enabled())
-      g_tg.NotifyEvent(StringFormat("GoldFX v3 started on %s symbols=%d", _Symbol, g_portfolio.Count()));
+      g_tg.NotifyEvent(StringFormat("GoldFX v3.2 started engine=%s on %s symbols=%d",
+                                    StratToString(g_params.strategy_engine), _Symbol, g_portfolio.Count()));
 
-   PrintFormat("GoldFX v3 | engine=%s money=%s R%d symbols=%d",
+   PrintFormat("GoldFX v3.2 | engine=%s money=%s R%d symbols=%d",
                StratToString(g_params.strategy_engine), MoneyModeToString(g_params.money_mode),
                (int)g_params.risk_level, g_portfolio.Count());
    return INIT_SUCCEEDED;
